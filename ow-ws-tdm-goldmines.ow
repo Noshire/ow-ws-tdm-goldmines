@@ -21,6 +21,11 @@ settings
 				Ilios Lighthouse
 			}
 		}
+
+		General
+		{
+			Game Mode Start: Immediately
+		}
 	}
 
 	extensions
@@ -41,11 +46,37 @@ variables
 {
 	global:
 		26: SpawnPositions
-		27: MinePositions
-		28: MinePositionsIndex
+		27: MinePositionArray
+		28: ArrayIterator
+		29: MineGoldMax
+		30: MineGoldCountArray
+		31: MineRadius
+		32: MineGoldIncrementInterval
+		33: MineGoldIncrementAmount
+		34: MineGoldStart
+		35: ArrayTemp
 
 	player:
 		26: TeamIndex
+}
+
+rule("Init@Global: ApplyWorkshopSettings")
+{
+	event
+	{
+		Ongoing - Global;
+	}
+
+	actions
+	{
+		Global.MineGoldMax = Workshop Setting Integer(Custom String("Gold Mines"), Custom String("Max. Gold per Mine"), 100, 10, 1000, 0);
+		Global.MineRadius = Workshop Setting Real(Custom String("Gold Mines"), Custom String("Radius"), 2.500, 0.500, 15, 0);
+		Global.MineGoldIncrementInterval = Workshop Setting Real(Custom String("Gold Mines"), Custom String(
+			"Gold Increase Interval in Seconds"), 5, 0.100, 60, 0);
+		Global.MineGoldIncrementAmount = Workshop Setting Integer(Custom String("Gold Mines"), Custom String("Gold Increment Amount"), 10,
+			1, 100, 0);
+		Global.MineGoldStart = Workshop Setting Integer(Custom String("Gold Mines"), Custom String("Initial Gold Amount"), 30, 0, 1000, 0);
+	}
 }
 
 rule("Init@Global: SetPositions")
@@ -58,13 +89,13 @@ rule("Init@Global: SetPositions")
 	actions
 	{
 		Global.SpawnPositions = Array(Vector(336.461, -24.274, 22.927), Vector(290.193, -24.276, -88.772));
-		Global.MinePositions = Array(Vector(329.230, -17.341, -56.517), Vector(341.309, -17.341, -27.567), Vector(332.087, -26.341,
+		Global.MinePositionArray = Array(Vector(329.230, -17.341, -56.517), Vector(341.309, -17.341, -27.567), Vector(332.087, -26.341,
 			-95.429), Vector(370.586, -26.341, -1.469), Vector(317.227, -22.342, -22.655), Vector(307.874, -22.341, -43.050), Vector(
 			357.681, -24.341, -51.111));
 	}
 }
 
-rule("Init@Global: SpawnMines")
+rule("Init@Global: InitMines")
 {
 	event
 	{
@@ -79,10 +110,15 @@ rule("Init@Global: SpawnMines")
 	actions
 	{
 		Wait(5, Ignore Condition);
-		For Global Variable(MinePositionsIndex, 0, Count Of(Global.MinePositions), 1);
-			Log To Inspector(Custom String("Mine at: {0}", Global.MinePositions[Global.MinePositionsIndex]));
-			Create Effect(All Players(All Teams), Sphere, Custom Color(191, 186, 33, 150), Global.MinePositions[Global.MinePositionsIndex],
-				Workshop Setting Real(Custom String("Gold Mines"), Custom String("Radius"), 2.500, 0.500, 15, 0), None);
+		For Global Variable(ArrayIterator, 0, Count Of(Global.MinePositionArray), 1);
+			Log To Inspector(Custom String("Mine at: {0}", Global.MinePositionArray[Global.ArrayIterator]));
+			Global.ArrayTemp = Global.MineGoldCountArray[Global.ArrayIterator];
+			Global.MineGoldCountArray[Global.ArrayIterator] = Global.MineGoldStart;
+			Create Effect(All Players(All Teams), Sphere, Custom Color(191, 186, 33, 150), Global.MinePositionArray[Global.ArrayIterator],
+				Global.MineRadius, None);
+			Create In-World Text(All Players(All Teams), Custom String("{0}/{1}", Global.MineGoldCountArray[Evaluate Once(Global.ArrayIterator)
+				], Global.MineGoldMax), Global.MinePositionArray[Global.ArrayIterator] + Up * 2.500, 1, Clip Against Surfaces, String, Color(
+				White), Default Visibility);
 		End;
 	}
 }
@@ -141,10 +177,47 @@ rule("DEBUG:Interact@Player: TeleportToRandomMine")
 
 	actions
 	{
-		disabled For Global Variable(MinePositionsIndex, 0, Count Of(Global.MinePositions), 1);
-		disabled Create Beam Effect(Event Player, Echo Focusing Beam, Event Player, Global.MinePositions[Global.MinePositionsIndex], Color(White),
+		disabled For Global Variable(ArrayIterator, 0, Count Of(Global.MinePositionArray), 1);
+		disabled Create Beam Effect(Event Player, Echo Focusing Beam, Event Player, Global.MinePositionArray[Global.ArrayIterator], Color(White),
 			Visible To Position and Radius);
 		disabled End;
-		Teleport(Event Player, Random Value In Array(Global.MinePositions));
+		Teleport(Event Player, Random Value In Array(Global.MinePositionArray));
+	}
+}
+
+rule("DEBUG:Init@Global: StartImmediately")
+{
+	event
+	{
+		Ongoing - Global;
+	}
+
+	actions
+	{
+		Set Match Time(6);
+	}
+}
+
+rule("Update@Global: UpdateMines")
+{
+	event
+	{
+		Ongoing - Global;
+	}
+
+	conditions
+	{
+		Is Game In Progress == True;
+	}
+
+	actions
+	{
+		Wait(Global.MineGoldIncrementInterval, Ignore Condition);
+		Log To Inspector(Custom String("Increment Gold in all Mines by {0}", Global.MineGoldIncrementAmount));
+		For Global Variable(ArrayIterator, 0, Count Of(Global.MineGoldCountArray), 1);
+			Global.MineGoldCountArray[Global.ArrayIterator] = Min(Global.MineGoldMax,
+				Global.MineGoldCountArray[Global.ArrayIterator] + Global.MineGoldIncrementAmount);
+		End;
+		Loop;
 	}
 }
