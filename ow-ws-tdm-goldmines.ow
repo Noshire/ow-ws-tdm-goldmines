@@ -42,6 +42,7 @@ variables
 	global:
 		26: SpawnPositions
 		27: MinePositions
+		28: MinePositionsIndex
 
 	player:
 		26: TeamIndex
@@ -60,6 +61,29 @@ rule("Init@Global: SetPositions")
 		Global.MinePositions = Array(Vector(329.230, -17.341, -56.517), Vector(341.309, -17.341, -27.567), Vector(332.087, -26.341,
 			-95.429), Vector(370.586, -26.341, -1.469), Vector(317.227, -22.342, -22.655), Vector(307.874, -22.341, -43.050), Vector(
 			357.681, -24.341, -51.111));
+	}
+}
+
+rule("Init@Global: SpawnMines")
+{
+	event
+	{
+		Ongoing - Global;
+	}
+
+	conditions
+	{
+		disabled Is Game In Progress == True;
+	}
+
+	actions
+	{
+		Wait(5, Ignore Condition);
+		For Global Variable(MinePositionsIndex, 0, Count Of(Global.MinePositions), 1);
+			Log To Inspector(Custom String("Mine at: {0}", Global.MinePositions[Global.MinePositionsIndex]));
+			Create Effect(All Players(All Teams), Sphere, Custom Color(191, 186, 33, 150), Global.MinePositions[Global.MinePositionsIndex],
+				Workshop Setting Real(Custom String("Gold Mines"), Custom String("Radius"), 2.500, 0.500, 15, 0), None);
+		End;
 	}
 }
 
@@ -96,5 +120,31 @@ rule("Respawn@Player: TeleportToSpawn")
 	actions
 	{
 		Teleport(Event Player, Global.SpawnPositions[Event Player.TeamIndex]);
+	}
+}
+
+rule("DEBUG:Interact@Player: TeleportToRandomMine")
+{
+	event
+	{
+		Ongoing - Each Player;
+		All;
+		All;
+	}
+
+	conditions
+	{
+		Has Spawned(Event Player) == True;
+		Is Alive(Event Player) == True;
+		Is Button Held(Event Player, Button(Interact)) == True;
+	}
+
+	actions
+	{
+		disabled For Global Variable(MinePositionsIndex, 0, Count Of(Global.MinePositions), 1);
+		disabled Create Beam Effect(Event Player, Echo Focusing Beam, Event Player, Global.MinePositions[Global.MinePositionsIndex], Color(White),
+			Visible To Position and Radius);
+		disabled End;
+		Teleport(Event Player, Random Value In Array(Global.MinePositions));
 	}
 }
