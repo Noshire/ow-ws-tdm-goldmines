@@ -71,6 +71,7 @@ variables
 		44: PlayerGoldBaseDepositTimerMax
 		45: TeamArray
 		46: SpawnRadius
+		47: GoldColor
 
 	player:
 		26: TeamIndex
@@ -164,6 +165,7 @@ rule("Init@Global: InitGlobalVars")
 		Global.ScoreTeamArray = Array(0, 0);
 		Global.ColorTeamArray = Array(Custom Color(39, 60, 219, 255), Custom Color(219, 39, 39, 255));
 		Global.RadiusPlayerProximityBuffer = 0.500;
+		Global.GoldColor = Custom Color(242, 255, 66, 255);
 	}
 }
 
@@ -308,6 +310,9 @@ rule("Init@Player: HUD")
 	actions
 	{
 		Disable Game Mode HUD(Event Player);
+		Create Progress Bar HUD Text(Event Player.GoldBaseDepositTimer > 0 ? Event Player : Null, 100 * Min(1,
+			Event Player.GoldBaseDepositTimer / Global.PlayerGoldBaseDepositTimerMax), Custom String("Depositing Gold..."), Top, 0,
+			Global.GoldColor, Global.GoldColor, Visible To and Values, Default Visibility);
 	}
 }
 
@@ -510,6 +515,7 @@ rule("Update@Player: UpdateGoldBaseDeposit")
 					Global.ScoreTeamArray[Event Player.A] += Event Player.GoldCount;
 					Event Player.GoldCount = 0;
 					Event Player.GoldBaseDepositTimer = 0;
+					Play Effect(Event Player, Ana Biotic Grenade Increased Healing Sound, Color(White), Position Of(Global.D), 100);
 				End;
 			End;
 		Else;
