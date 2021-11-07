@@ -269,6 +269,10 @@ rule("Init@Global: HUD")
 		Create Progress Bar HUD Text(All Players(All Teams), 100 * Min(1, Global.ScoreTeamArray[1] / Global.ScoreLimitTeamArray[1]),
 			Custom String("Red Team: {0} / {1}", Global.ScoreTeamArray[1], Global.ScoreLimitTeamArray[1]), Right, 0,
 			Global.ColorTeamArray[1], Global.ColorTeamArray[1], Values, Default Visibility);
+		Create In-World Text(All Players(Team 1), Custom String("{0} Base", Icon String(Flag)),
+			Global.SpawnPositionTeamArray[0] + Up * 2.500, 1.500, Do Not Clip, None, Global.ColorTeamArray[0], Default Visibility);
+		Create In-World Text(All Players(Team 2), Custom String("{0} Base", Icon String(Flag)),
+			Global.SpawnPositionTeamArray[1] + Up * 1.500, 3, Do Not Clip, None, Global.ColorTeamArray[1], Default Visibility);
 	}
 }
 
