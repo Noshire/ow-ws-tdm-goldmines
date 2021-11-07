@@ -62,15 +62,35 @@ variables
 		35: ArrayIteratorB
 		36: DEBUG
 		37: MinePlayerIntersectionArray2D
-		38: MineRadiusPlayerProximityFactor
+		38: MineRadiusPlayerProximityBuffer
+		39: PlayerGoldHarvestInterval
+		40: PlayerGoldHarvestAmountBase
 
 	player:
 		26: TeamIndex
 		27: MineInRangeArray
 		28: ArrayIterator
+		29: GoldCount
+		30: GoldHarvestAmount
 }
 
-rule("Init@Global: ApplyWorkshopSettings")
+rule("Init@Global: ApplyWorkshopSettings: Players")
+{
+	event
+	{
+		Ongoing - Global;
+	}
+
+	actions
+	{
+		Global.PlayerGoldHarvestInterval = Workshop Setting Real(Custom String("Players"), Custom String(
+			"Gold Harvest Interval in Seconds"), 0.500, 0.050, 60, 0);
+		Global.PlayerGoldHarvestAmountBase = Workshop Setting Integer(Custom String("Players"), Custom String("Gold Harvest Amount Base"),
+			3, 0, 1000, 0);
+	}
+}
+
+rule("Init@Global: ApplyWorkshopSettings: Gold Mines")
 {
 	event
 	{
@@ -83,9 +103,21 @@ rule("Init@Global: ApplyWorkshopSettings")
 		Global.MineRadius = Workshop Setting Real(Custom String("Gold Mines"), Custom String("Radius"), 2.500, 0.500, 15, 0);
 		Global.MineGoldIncrementInterval = Workshop Setting Real(Custom String("Gold Mines"), Custom String(
 			"Gold Increase Interval in Seconds"), 5, 0.100, 60, 0);
-		Global.MineGoldIncrementAmount = Workshop Setting Integer(Custom String("Gold Mines"), Custom String("Gold Increment Amount"), 10,
+		Global.MineGoldIncrementAmount = Workshop Setting Integer(Custom String("Gold Mines"), Custom String("Gold Increase Amount"), 10,
 			1, 100, 0);
 		Global.MineGoldStart = Workshop Setting Integer(Custom String("Gold Mines"), Custom String("Initial Gold Amount"), 30, 0, 1000, 0);
+	}
+}
+
+rule("Init@Global: ApplyWorkshopSettings: Dev")
+{
+	event
+	{
+		Ongoing - Global;
+	}
+
+	actions
+	{
 		Global.DEBUG = Workshop Setting Toggle(Custom String("Dev Tools"), Custom String("Debug Mode"), False, 0);
 	}
 }
@@ -103,7 +135,7 @@ rule("Init@Global: InitGlobalVars")
 		Global.MinePositionArray = Array(Vector(329.230, -17.341, -56.517), Vector(341.309, -17.341, -27.567), Vector(332.087, -26.341,
 			-95.429), Vector(370.586, -26.341, -1.469), Vector(317.227, -22.342, -22.655), Vector(307.874, -22.341, -43.050), Vector(
 			357.681, -24.341, -51.111));
-		Global.MineRadiusPlayerProximityFactor = 1.100;
+		Global.MineRadiusPlayerProximityBuffer = 0.500;
 	}
 }
 
@@ -132,6 +164,21 @@ rule("Init@Global: InitMines")
 				Global.ArrayIteratorA)], Global.MineGoldMax), Global.MinePositionArray[Global.ArrayIteratorA] + Up * 2.500, 1,
 				Clip Against Surfaces, String, Color(White), Default Visibility);
 		End;
+	}
+}
+
+rule("Init@Player: InitPlayerVars")
+{
+	event
+	{
+		Ongoing - Each Player;
+		All;
+		All;
+	}
+
+	actions
+	{
+		Event Player.GoldHarvestAmount = Global.PlayerGoldHarvestAmountBase;
 	}
 }
 
@@ -272,18 +319,49 @@ rule("Update@Global: UpdateMinePlayerIntersection")
 		Ongoing - Global;
 	}
 
+	conditions
+	{
+		Is Game In Progress == True;
+	}
+
 	actions
 	{
 		Wait(0.100, Ignore Condition);
 		For Global Variable(ArrayIteratorA, 0, Count Of(Global.MinePositionArray), 1);
 			Global.MinePlayerIntersectionArray2D[Global.ArrayIteratorA] = Filtered Array(All Players(All Teams), Is Alive(
 				Current Array Element) && Distance Between(Global.MinePositionArray[Global.ArrayIteratorA], Position Of(Current Array Element))
-				* Global.MineRadiusPlayerProximityFactor <= Global.MineRadius);
-			disabled For Global Variable(ArrayIteratorB, 0, Count Of(All Players(All Teams)), 1);
-			disabled If(Is Alive(All Players(All Teams)[Global.ArrayIteratorB]) && Distance Between(Global.MinePositionArray[Global.ArrayIteratorA],
-				Position Of(All Players(All Teams)[Global.ArrayIteratorB])) * Global.MineRadiusPlayerProximityFactor <= Global.MineRadius);
-			disabled Else;
-			disabled End;
+				<= Global.MineRadius + Global.MineRadiusPlayerProximityBuffer);
+		End;
+		Loop;
+	}
+}
+
+rule("Update@Global: UpdateMinePlayerHarvest")
+{
+	event
+	{
+		Ongoing - Global;
+	}
+
+	actions
+	{
+		Wait(Global.PlayerGoldHarvestInterval, Ignore Condition);
+		For Global Variable(ArrayIteratorA, 0, Count Of(Global.MinePlayerIntersectionArray2D), 1);
+			"A shuffled array of all players within the Gold Mine's radius."
+			Global.A = Randomized Array(Global.MinePlayerIntersectionArray2D[Global.ArrayIteratorA]);
+			"The maximum harvestable gold."
+			Global.B = Global.MineGoldCountArray[Global.ArrayIteratorA];
+			For Global Variable(ArrayIteratorB, 0, Count Of(Global.A), 1);
+				"The player to process."
+				Global.D = Global.A[Global.ArrayIteratorB];
+				Global.C = Min(Global.B, Global.D.GoldHarvestAmount);
+				If(Global.C > 0);
+					Global.D.GoldCount += Global.C;
+					Global.MineGoldCountArray[Global.ArrayIteratorA] -= Global.C;
+					Play Effect(Global.D, Buff Explosion Sound, Color(White), Position Of(Global.D), 100);
+					Log To Inspector(Custom String("Player {0} Harvests {1} Gold from Mine {2}", Global.D, Global.C, Global.ArrayIteratorA));
+				End;
+			End;
 		End;
 		Loop;
 	}
