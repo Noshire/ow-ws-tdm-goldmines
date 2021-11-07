@@ -41,6 +41,7 @@ variables
 {
 	global:
 		26: SpawnPositions
+		27: MinePositions
 
 	player:
 		26: TeamIndex
@@ -56,6 +57,9 @@ rule("Init@Global: SetPositions")
 	actions
 	{
 		Global.SpawnPositions = Array(Vector(336.461, -24.274, 22.927), Vector(290.193, -24.276, -88.772));
+		Global.MinePositions = Array(Vector(329.230, -17.341, -56.517), Vector(341.309, -17.341, -27.567), Vector(332.087, -26.341,
+			-95.429), Vector(370.586, -26.341, -1.469), Vector(317.227, -22.342, -22.655), Vector(307.874, -22.341, -43.050), Vector(
+			357.681, -24.341, -51.111));
 	}
 }
 
