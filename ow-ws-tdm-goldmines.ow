@@ -1,0 +1,96 @@
+settings
+{
+	main
+	{
+		Mode Name: "Goldmine TDM"
+	}
+
+	lobby
+	{
+		Map Rotation: Paused
+		Max Team 1 Players: 3
+		Max Team 2 Players: 3
+	}
+
+	modes
+	{
+		Team Deathmatch
+		{
+			enabled maps
+			{
+				Ilios Lighthouse
+			}
+		}
+	}
+
+	extensions
+	{
+		Beam Effects
+		Beam Sounds
+		Buff Status Effects
+		Debuff Status Effects
+		Buff and Debuff Sounds
+		Energy Explosion Effects
+		Kinetic Explosion Effects
+		Explosion Sounds
+		Play More Effects
+	}
+}
+
+variables
+{
+	global:
+		26: SpawnPositions
+
+	player:
+		26: TeamIndex
+}
+
+rule("Init@Global: SetPositions")
+{
+	event
+	{
+		Ongoing - Global;
+	}
+
+	actions
+	{
+		Global.SpawnPositions = Array(Vector(336.461, -24.274, 22.927), Vector(290.193, -24.276, -88.772));
+	}
+}
+
+rule("Init@Player: SetTeamIndex")
+{
+	event
+	{
+		Ongoing - Each Player;
+		All;
+		All;
+	}
+
+	actions
+	{
+		Event Player.TeamIndex = Team Of(Event Player) == Team 1 ? 0 : 1;
+	}
+}
+
+rule("Respawn@Player: TeleportToSpawn")
+{
+	event
+	{
+		Ongoing - Each Player;
+		All;
+		All;
+	}
+
+	conditions
+	{
+		Has Spawned(Event Player) == True;
+		Is Alive(Event Player) == True;
+	}
+
+	actions
+	{
+		Teleport(Event Player, Global.SpawnPositions[Event Player.TeamIndex]);
+	}
+}
