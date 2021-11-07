@@ -75,11 +75,54 @@ variables
 
 	player:
 		26: TeamIndex
-		27: MineInRangeArray
-		28: ArrayIterator
 		29: GoldCount
 		30: GoldHarvestAmount
 		31: GoldBaseDepositTimer
+}
+
+rule("DEBUG:Interact@Player: TeleportToRandomMine")
+{
+	event
+	{
+		Ongoing - Each Player;
+		All;
+		All;
+	}
+
+	conditions
+	{
+		Global.DEBUG == True;
+		Has Spawned(Event Player) == True;
+		Is Alive(Event Player) == True;
+		Is Button Held(Event Player, Button(Interact)) == True;
+	}
+
+	actions
+	{
+		disabled For Global Variable(ArrayIteratorA, 0, Count Of(Global.MinePositionArray), 1);
+		disabled Create Beam Effect(Event Player, Echo Focusing Beam, Event Player, Global.MinePositionArray[Global.ArrayIteratorA], Color(White),
+			Visible To Position and Radius);
+		disabled End;
+		Teleport(Event Player, Random Value In Array(Global.MinePositionArray));
+	}
+}
+
+rule("DEBUG:Init@Global: StartImmediately")
+{
+	event
+	{
+		Ongoing - Global;
+	}
+
+	conditions
+	{
+		Global.DEBUG == True;
+	}
+
+	actions
+	{
+		Set Match Time(6);
+	}
 }
 
 rule("Init@Global: ApplyWorkshopSettings: Teams")
@@ -310,8 +353,10 @@ rule("Init@Player: HUD")
 	actions
 	{
 		Disable Game Mode HUD(Event Player);
+		Create HUD Text(Event Player, Custom String("{0} {1} {0}", Icon String(Diamond), Event Player.GoldCount), Null, Null, Top, 0,
+			Global.GoldColor, Color(White), Color(White), String, Default Visibility);
 		Create Progress Bar HUD Text(Event Player.GoldBaseDepositTimer > 0 ? Event Player : Null, 100 * Min(1,
-			Event Player.GoldBaseDepositTimer / Global.PlayerGoldBaseDepositTimerMax), Custom String("Depositing Gold..."), Top, 0,
+			Event Player.GoldBaseDepositTimer / Global.PlayerGoldBaseDepositTimerMax), Custom String("Depositing Gold..."), Top, 1,
 			Global.GoldColor, Global.GoldColor, Visible To and Values, Default Visibility);
 	}
 }
@@ -356,76 +401,6 @@ rule("Update@Global: UpdateMines")
 		For Global Variable(ArrayIteratorA, 0, Count Of(Global.MineGoldCountArray), 1);
 			Global.MineGoldCountArray[Global.ArrayIteratorA] = Min(Global.MineGoldMax,
 				Global.MineGoldCountArray[Global.ArrayIteratorA] + Global.MineGoldIncrementAmount);
-		End;
-		Loop;
-	}
-}
-
-rule("DEBUG:Interact@Player: TeleportToRandomMine")
-{
-	event
-	{
-		Ongoing - Each Player;
-		All;
-		All;
-	}
-
-	conditions
-	{
-		Global.DEBUG == True;
-		Has Spawned(Event Player) == True;
-		Is Alive(Event Player) == True;
-		Is Button Held(Event Player, Button(Interact)) == True;
-	}
-
-	actions
-	{
-		disabled For Global Variable(ArrayIteratorA, 0, Count Of(Global.MinePositionArray), 1);
-		disabled Create Beam Effect(Event Player, Echo Focusing Beam, Event Player, Global.MinePositionArray[Global.ArrayIteratorA], Color(White),
-			Visible To Position and Radius);
-		disabled End;
-		Teleport(Event Player, Random Value In Array(Global.MinePositionArray));
-	}
-}
-
-rule("DEBUG:Init@Global: StartImmediately")
-{
-	event
-	{
-		Ongoing - Global;
-	}
-
-	conditions
-	{
-		Global.DEBUG == True;
-	}
-
-	actions
-	{
-		Set Match Time(6);
-	}
-}
-
-disabled rule("Update@Player: UpdateMinesInRange")
-{
-	event
-	{
-		Ongoing - Each Player;
-		All;
-		All;
-	}
-
-	conditions
-	{
-		Is Game In Progress == True;
-	}
-
-	actions
-	{
-		Wait(0.100, Ignore Condition);
-		For Player Variable(Event Player, ArrayIterator, 0, Count Of(Global.MinePositionArray), 1);
-			Event Player.MineInRangeArray[Event Player.ArrayIterator] = Distance Between(Position Of(Event Player),
-				Global.MinePositionArray[Event Player.ArrayIterator]) <= Global.MineRadius;
 		End;
 		Loop;
 	}
