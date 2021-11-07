@@ -199,8 +199,9 @@ rule("Init@Global: InitMines")
 			Log To Inspector(Custom String("Mine at: {0}", Global.MinePositionArray[Global.ArrayIteratorA]));
 			Global.ArrayIteratorB = Global.MineGoldCountArray[Global.ArrayIteratorA];
 			Global.MineGoldCountArray[Global.ArrayIteratorA] = Global.MineGoldStart;
-			Create Effect(All Players(All Teams), Sphere, Custom Color(191, 186, 33, 150), Global.MinePositionArray[Global.ArrayIteratorA],
-				Global.MineRadius, None);
+			Create Effect(All Players(All Teams), Sphere, Count Of(Global.MinePlayerIntersectionArray2D[Evaluate Once(Global.ArrayIteratorA)])
+				== 0 ? Custom Color(242, 255, 66, 255) : Custom Color(219, 117, 39, 255), Global.MinePositionArray[Global.ArrayIteratorA],
+				Global.MineRadius, Color);
 			Create In-World Text(All Players(All Teams), Custom String("{0}/{1}", Global.MineGoldCountArray[Evaluate Once(
 				Global.ArrayIteratorA)], Global.MineGoldMax), Global.MinePositionArray[Global.ArrayIteratorA] + Up * 2.500, 1,
 				Clip Against Surfaces, String, Color(White), Default Visibility);
