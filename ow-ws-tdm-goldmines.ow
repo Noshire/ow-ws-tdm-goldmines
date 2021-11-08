@@ -84,6 +84,7 @@ variables
 
 	player:
 		26: TeamIndex
+		27: ClosestHarvestingMine
 		29: GoldCount
 		30: GoldHarvestAmount
 		31: GoldBaseDepositTimer
@@ -205,6 +206,27 @@ rule("Init@Global: ApplyWorkshopSettings: Dev")
 	}
 }
 
+rule("Init@Global: Map: Ilios Lighthouse")
+{
+	event
+	{
+		Ongoing - Global;
+	}
+
+	conditions
+	{
+		Current Map == Map(Ilios Lighthouse);
+	}
+
+	actions
+	{
+		Global.SpawnPositionTeamArray = Array(Vector(336.461, -24.274, 22.927), Vector(290.193, -24.276, -88.772));
+		Global.MinePositionArray = Array(Vector(329.230, -17.341, -56.517), Vector(341.309, -17.341, -27.567), Vector(332.087, -26.341,
+			-95.429), Vector(370.586, -26.341, -1.469), Vector(317.227, -22.342, -22.655), Vector(307.874, -22.341, -43.050), Vector(
+			357.681, -24.341, -51.111));
+	}
+}
+
 rule("Init@Global: InitGlobalVars")
 {
 	event
@@ -214,15 +236,11 @@ rule("Init@Global: InitGlobalVars")
 
 	actions
 	{
-		Global.SpawnPositionTeamArray = Array(Vector(336.461, -24.274, 22.927), Vector(290.193, -24.276, -88.772));
 		Global.TeamArray = Array(Team 1, Team 2);
-		Global.MinePositionArray = Array(Vector(329.230, -17.341, -56.517), Vector(341.309, -17.341, -27.567), Vector(332.087, -26.341,
-			-95.429), Vector(370.586, -26.341, -1.469), Vector(317.227, -22.342, -22.655), Vector(307.874, -22.341, -43.050), Vector(
-			357.681, -24.341, -51.111));
 		Global.ScoreTeamArray = Array(0, 0);
-		Global.ColorTeamArray = Array(Custom Color(39, 60, 219, 255), Custom Color(219, 39, 39, 255));
 		Global.RadiusPlayerProximityBuffer = 0.500;
 		Global.GoldColor = Custom Color(242, 255, 66, 255);
+		Global.ColorTeamArray = Array(Custom Color(39, 60, 219, 255), Custom Color(219, 39, 39, 255));
 	}
 }
 
@@ -372,6 +390,9 @@ rule("Init@Player: HUD")
 		Create Progress Bar HUD Text(Event Player.GoldBaseDepositTimer > 0 ? Event Player : Null, 100 * Min(1,
 			Event Player.GoldBaseDepositTimer / Global.PlayerGoldBaseDepositTimerMax), Custom String("Depositing Gold..."), Top, 1,
 			Global.GoldColor, Global.GoldColor, Visible To and Values, Default Visibility);
+		Create Progress Bar HUD Text(Event Player.GoldBaseDepositTimer > 0 ? Event Player : Null, 100 * Min(1,
+			Event Player.GoldBaseDepositTimer / Global.PlayerGoldBaseDepositTimerMax), Custom String("{0} / {1}"), Top, 1,
+			Global.GoldColor, Global.GoldColor, Visible To and Values, Default Visibility);
 	}
 }
 
@@ -434,11 +455,33 @@ rule("Update@Global: UpdateMinePlayerIntersection")
 
 	actions
 	{
+		"Clear the \"closest GoldMine in range\" for all players."
+		For Global Variable(ArrayIteratorA, 0, Count Of(All Players(All Teams)), 1);
+			All Players(All Teams)[Global.ArrayIteratorA].ClosestHarvestingMine = -1;
+		End;
 		Wait(0.100, Abort When False);
+		"Loop through all GoldMines..."
 		For Global Variable(ArrayIteratorA, 0, Count Of(Global.MinePositionArray), 1);
+			"Update the list of players within range of this GoldMine."
 			Global.MinePlayerIntersectionArray2D[Global.ArrayIteratorA] = Filtered Array(All Players(All Teams), Has Spawned(
 				Current Array Element) && Is Alive(Current Array Element) && Distance Between(Global.MinePositionArray[Global.ArrayIteratorA],
 				Position Of(Current Array Element)) <= Global.MineRadius + Global.RadiusPlayerProximityBuffer);
+			"Loop through all players in range of this GoldMine..."
+			For Global Variable(ArrayIteratorB, 0, Count Of(Global.MinePlayerIntersectionArray2D[Global.ArrayIteratorA]), 1);
+				disabled Log To Inspector(Custom String("CheckDist: GoldMine {0}, Player {1}.", Global.ArrayIteratorA, Global.ArrayIteratorB));
+				"Cache the Player to a temporary variable."
+				Global.A = Global.MinePlayerIntersectionArray2D[Global.ArrayIteratorA][Global.ArrayIteratorB];
+				Global.B = Distance Between(Position Of(Global.A), Global.MinePositionArray[Global.ArrayIteratorA]);
+				Global.C = Global.A.ClosestHarvestingMine < 0 ? 99999 : Distance Between(Position Of(Global.A),
+					Global.MinePositionArray[Global.A.ClosestHarvestingMine]);
+				Log To Inspector(Custom String("P: {0}, NextDist: {1}, MinDist: {2}", Global.A, Global.B, Global.C));
+				"If the distance is less than the previous smallest distance between the player and a GoldMine..."
+				If(Global.B < Global.C);
+					"Set it as the closest GoldMine for this player."
+					Global.A.ClosestHarvestingMine = Global.ArrayIteratorA;
+					Log To Inspector(Custom String("Set Closest Mine: Player: {0}, Mine: {1}", Global.A, Global.A.ClosestHarvestingMine));
+				End;
+			End;
 		End;
 		Loop If Condition Is True;
 	}
