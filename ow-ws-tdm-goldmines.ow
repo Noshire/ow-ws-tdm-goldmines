@@ -25,12 +25,15 @@ settings
 		General
 		{
 			Game Mode Start: Immediately
+			Self Initiated Respawn: Off
 		}
 	}
 
 	workshop
 	{
+		Death Loot Collection Radius: 0.500
 		Debug Mode: On
+		Gold Drop Ratio: 0.500
 	}
 
 	extensions
@@ -72,6 +75,12 @@ variables
 		45: TeamArray
 		46: SpawnRadius
 		47: GoldColor
+		48: PlayerDeathGoldDropRatio
+		49: GoldLootOrbPositionArray
+		50: GoldLootOrbValueArray
+		51: GoldLootOrbEffectArray
+		52: GoldLootOrbCollectionRadius
+		53: GoldLootOrbVisualRadius
 
 	player:
 		26: TeamIndex
@@ -125,7 +134,7 @@ rule("DEBUG:Init@Global: StartImmediately")
 	}
 }
 
-rule("Init@Global: ApplyWorkshopSettings: Teams")
+rule("Init@Global: ApplyWorkshopSettings: General")
 {
 	event
 	{
@@ -134,10 +143,14 @@ rule("Init@Global: ApplyWorkshopSettings: Teams")
 
 	actions
 	{
-		Global.A = Workshop Setting Integer(Custom String("Teams"), Custom String("Score Limit"), 3000, 10, 100000, 0);
+		Global.A = Workshop Setting Integer(Custom String("General"), Custom String("Score Limit"), 3000, 10, 100000, 0);
 		Global.ScoreLimitTeamArray[0] = Global.A;
 		Global.ScoreLimitTeamArray[1] = Global.A;
-		Global.SpawnRadius = Workshop Setting Real(Custom String("Teams"), Custom String("Team Base Radius in Meters"), 5, 0.500, 15, 0);
+		Global.SpawnRadius = Workshop Setting Real(Custom String("General"), Custom String("Team Base Radius in Meters"), 5, 0.500, 15, 0);
+		Global.GoldLootOrbCollectionRadius = Workshop Setting Real(Custom String("General"), Custom String("Death Loot Collection Radius"),
+			0.500, 0.100, 15, 0);
+		Global.GoldLootOrbVisualRadius = Workshop Setting Real(Custom String("General"), Custom String("Death Loot Visual Radius"), 0.350,
+			0.100, 15, 0);
 	}
 }
 
@@ -156,6 +169,7 @@ rule("Init@Global: ApplyWorkshopSettings: Players")
 			3, 0, 1000, 0);
 		Global.PlayerGoldBaseDepositTimerMax = Workshop Setting Real(Custom String("Players"), Custom String(
 			"Gold Deposit Timer in Seconds"), 3, 0, 60, 0);
+		Global.PlayerDeathGoldDropRatio = Workshop Setting Real(Custom String("Players"), Custom String("Gold Drop Ratio"), 1, 0, 1, 0);
 	}
 }
 
@@ -396,13 +410,13 @@ rule("Update@Global: UpdateMines")
 
 	actions
 	{
-		Wait(Global.MineGoldIncrementInterval, Ignore Condition);
+		Wait(Global.MineGoldIncrementInterval, Abort When False);
 		Log To Inspector(Custom String("Increment Gold in all Mines by {0}", Global.MineGoldIncrementAmount));
 		For Global Variable(ArrayIteratorA, 0, Count Of(Global.MineGoldCountArray), 1);
 			Global.MineGoldCountArray[Global.ArrayIteratorA] = Min(Global.MineGoldMax,
 				Global.MineGoldCountArray[Global.ArrayIteratorA] + Global.MineGoldIncrementAmount);
 		End;
-		Loop;
+		Loop If Condition Is True;
 	}
 }
 
@@ -420,13 +434,13 @@ rule("Update@Global: UpdateMinePlayerIntersection")
 
 	actions
 	{
-		Wait(0.100, Ignore Condition);
+		Wait(0.100, Abort When False);
 		For Global Variable(ArrayIteratorA, 0, Count Of(Global.MinePositionArray), 1);
-			Global.MinePlayerIntersectionArray2D[Global.ArrayIteratorA] = Filtered Array(All Players(All Teams), Is Alive(
-				Current Array Element) && Distance Between(Global.MinePositionArray[Global.ArrayIteratorA], Position Of(Current Array Element))
-				<= Global.MineRadius + Global.RadiusPlayerProximityBuffer);
+			Global.MinePlayerIntersectionArray2D[Global.ArrayIteratorA] = Filtered Array(All Players(All Teams), Has Spawned(
+				Current Array Element) && Is Alive(Current Array Element) && Distance Between(Global.MinePositionArray[Global.ArrayIteratorA],
+				Position Of(Current Array Element)) <= Global.MineRadius + Global.RadiusPlayerProximityBuffer);
 		End;
-		Loop;
+		Loop If Condition Is True;
 	}
 }
 
@@ -478,7 +492,7 @@ rule("Update@Player: UpdateGoldBaseDeposit")
 
 	actions
 	{
-		Wait(0.100, Ignore Condition);
+		Wait(0.100, Abort When False);
 		"Get EventPlayer's team index."
 		Event Player.A = Team Of(Event Player) == Team 1 ? 0 : 1;
 		"Get EventPlayer's team base location."
@@ -497,6 +511,62 @@ rule("Update@Player: UpdateGoldBaseDeposit")
 			"EventPlayer has left the team base; reset the timer."
 			Event Player.GoldBaseDepositTimer = 0;
 		End;
-		Loop;
+		Loop If Condition Is True;
+	}
+}
+
+rule("Update@Player: UpdateGoldLootCollision")
+{
+	event
+	{
+		Ongoing - Each Player;
+		All;
+		All;
+	}
+
+	conditions
+	{
+		Is Game In Progress == True;
+		Is Alive(Event Player) == True;
+		Has Spawned(Event Player) == True;
+	}
+
+	actions
+	{
+		Wait(0.100, Abort When False);
+		For Global Variable(ArrayIteratorA, 0, Count Of(Global.GoldLootOrbPositionArray), 1);
+			If(Distance Between(Position Of(Event Player), Global.GoldLootOrbPositionArray[Global.ArrayIteratorA])
+				<= Global.GoldLootOrbCollectionRadius + Global.RadiusPlayerProximityBuffer);
+				Destroy Effect(Global.GoldLootOrbEffectArray[Global.ArrayIteratorA]);
+				Event Player.GoldCount += Global.GoldLootOrbValueArray[Global.ArrayIteratorA];
+				Modify Global Variable(GoldLootOrbPositionArray, Remove From Array By Index, Global.ArrayIteratorA);
+				Modify Global Variable(GoldLootOrbValueArray, Remove From Array By Index, Global.ArrayIteratorA);
+				Modify Global Variable(GoldLootOrbEffectArray, Remove From Array By Index, Global.ArrayIteratorA);
+				Play Effect(Event Player, Buff Explosion Sound, Color(White), Event Player, 100);
+			End;
+		End;
+		Loop If Condition Is True;
+	}
+}
+
+rule("OnDeath@Player: DropGold")
+{
+	event
+	{
+		Player Died;
+		All;
+		All;
+	}
+
+	actions
+	{
+		Event Player.A = Round To Integer(Event Player.GoldCount * Global.PlayerDeathGoldDropRatio, Down);
+		Abort If(Event Player.A == 0);
+		Modify Global Variable(GoldLootOrbPositionArray, Append To Array, Nearest Walkable Position(Position Of(Event Player)));
+		Modify Global Variable(GoldLootOrbValueArray, Append To Array, Event Player.A);
+		Event Player.GoldCount -= Event Player.A;
+		Create Effect(All Players(All Teams), Orb, Global.GoldColor, Last Of(Global.GoldLootOrbPositionArray),
+			Global.GoldLootOrbVisualRadius, None);
+		Modify Global Variable(GoldLootOrbEffectArray, Append To Array, Last Created Entity);
 	}
 }
