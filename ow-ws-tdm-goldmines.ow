@@ -33,7 +33,6 @@ settings
 	{
 		Death Loot Collection Radius: 0.500
 		Debug Mode: On
-		Gold Drop Ratio: 0.500
 	}
 
 	extensions
@@ -278,10 +277,10 @@ rule("Init@Global: InitMines")
 			Global.MineGoldCountArray[Global.ArrayIteratorA] = Global.MineGoldStart;
 			Create Effect(All Players(All Teams), Sphere, Count Of(Global.MinePlayerIntersectionArray2D[Evaluate Once(Global.ArrayIteratorA)])
 				== 0 ? Custom Color(242, 255, 66, 255) : Custom Color(219, 117, 39, 255), Global.MinePositionArray[Global.ArrayIteratorA],
-				Global.MineRadius, Color);
+				Global.MineRadius, Visible To and Color);
 			Create In-World Text(All Players(All Teams), Custom String("{0}/{1}", Global.MineGoldCountArray[Evaluate Once(
 				Global.ArrayIteratorA)], Global.MineGoldMax), Global.MinePositionArray[Global.ArrayIteratorA] + Up * 2.500, 1,
-				Clip Against Surfaces, String, Color(White), Default Visibility);
+				Clip Against Surfaces, Visible To and String, Color(White), Default Visibility);
 		End;
 	}
 }
@@ -303,10 +302,7 @@ rule("Init@Global: InitSpawns")
 		For Global Variable(ArrayIteratorA, 0, Count Of(Global.SpawnPositionTeamArray), 1);
 			Log To Inspector(Custom String("Spawn at: {0}", Global.SpawnPositionTeamArray[Global.ArrayIteratorA]));
 			Create Effect(All Players(All Teams), Sphere, Global.ColorTeamArray[Global.ArrayIteratorA],
-				Global.SpawnPositionTeamArray[Global.ArrayIteratorA], Global.SpawnRadius, None);
-			disabled Create In-World Text(All Players(All Teams), Custom String("{0}/{1}", Global.MineGoldCountArray[Evaluate Once(
-				Global.ArrayIteratorA)], Global.MineGoldMax), Global.MinePositionArray[Global.ArrayIteratorA] + Up * 2.500, 1,
-				Clip Against Surfaces, String, Color(White), Default Visibility);
+				Global.SpawnPositionTeamArray[Global.ArrayIteratorA], Global.SpawnRadius, Visible To);
 		End;
 	}
 }
@@ -342,14 +338,14 @@ rule("Init@Global: HUD")
 	{
 		Create Progress Bar HUD Text(All Players(All Teams), 100 * Min(1, Global.ScoreTeamArray[0] / Global.ScoreLimitTeamArray[0]),
 			Custom String("Blue Team: {0} / {1}", Global.ScoreTeamArray[0], Global.ScoreLimitTeamArray[0]), Left, 0,
-			Global.ColorTeamArray[0], Global.ColorTeamArray[0], Values, Default Visibility);
+			Global.ColorTeamArray[0], Global.ColorTeamArray[0], Visible To and Values, Visible Always);
 		Create Progress Bar HUD Text(All Players(All Teams), 100 * Min(1, Global.ScoreTeamArray[1] / Global.ScoreLimitTeamArray[1]),
 			Custom String("Red Team: {0} / {1}", Global.ScoreTeamArray[1], Global.ScoreLimitTeamArray[1]), Right, 0,
-			Global.ColorTeamArray[1], Global.ColorTeamArray[1], Values, Default Visibility);
+			Global.ColorTeamArray[1], Global.ColorTeamArray[1], Visible To and Values, Visible Always);
 		Create In-World Text(All Players(Team 1), Custom String("{0} Base", Icon String(Flag)),
-			Global.SpawnPositionTeamArray[0] + Up * 2.500, 1.500, Do Not Clip, None, Global.ColorTeamArray[0], Default Visibility);
+			Global.SpawnPositionTeamArray[0] + Up * 2.500, 1.500, Do Not Clip, Visible To, Global.ColorTeamArray[0], Default Visibility);
 		Create In-World Text(All Players(Team 2), Custom String("{0} Base", Icon String(Flag)),
-			Global.SpawnPositionTeamArray[1] + Up * 1.500, 3, Do Not Clip, None, Global.ColorTeamArray[1], Default Visibility);
+			Global.SpawnPositionTeamArray[1] + Up * 2.500, 1.500, Do Not Clip, Visible To, Global.ColorTeamArray[1], Default Visibility);
 	}
 }
 
@@ -386,7 +382,7 @@ rule("Init@Player: HUD")
 	{
 		Disable Game Mode HUD(Event Player);
 		Create HUD Text(Event Player, Custom String("{0} {1} {0}", Icon String(Diamond), Event Player.GoldCount), Null, Null, Top, 0,
-			Global.GoldColor, Color(White), Color(White), String, Default Visibility);
+			Global.GoldColor, Color(White), Color(White), Visible To and String, Default Visibility);
 		Create Progress Bar HUD Text(Event Player.GoldBaseDepositTimer > 0 ? Event Player : Null, 100 * Min(1,
 			Event Player.GoldBaseDepositTimer / Global.PlayerGoldBaseDepositTimerMax), Custom String("Depositing Gold..."), Top, 1,
 			Global.GoldColor, Global.GoldColor, Visible To and Values, Default Visibility);
@@ -433,7 +429,7 @@ rule("Update@Global: UpdateMines")
 	actions
 	{
 		Wait(Global.MineGoldIncrementInterval, Abort When False);
-		Log To Inspector(Custom String("Increment Gold in all Mines by {0}", Global.MineGoldIncrementAmount));
+		disabled Log To Inspector(Custom String("Increment Gold in all Mines by {0}", Global.MineGoldIncrementAmount));
 		For Global Variable(ArrayIteratorA, 0, Count Of(Global.MineGoldCountArray), 1);
 			Global.MineGoldCountArray[Global.ArrayIteratorA] = Min(Global.MineGoldMax,
 				Global.MineGoldCountArray[Global.ArrayIteratorA] + Global.MineGoldIncrementAmount);
@@ -588,6 +584,7 @@ rule("Update@Player: UpdateGoldLootCollision")
 				Modify Global Variable(GoldLootOrbValueArray, Remove From Array By Index, Global.ArrayIteratorA);
 				Modify Global Variable(GoldLootOrbEffectArray, Remove From Array By Index, Global.ArrayIteratorA);
 				Play Effect(Event Player, Buff Explosion Sound, Color(White), Event Player, 100);
+				Log To Inspector(Custom String("Destroy GoldLoot: {0}", Global.ArrayIteratorA));
 			End;
 		End;
 		Loop If Condition Is True;
@@ -605,13 +602,16 @@ rule("OnDeath@Player: DropGold")
 
 	actions
 	{
+		Wait(0.250, Ignore Condition);
 		Event Player.A = Round To Integer(Event Player.GoldCount * Global.PlayerDeathGoldDropRatio, Down);
 		Abort If(Event Player.A == 0);
 		Modify Global Variable(GoldLootOrbPositionArray, Append To Array, Nearest Walkable Position(Position Of(Event Player)));
 		Modify Global Variable(GoldLootOrbValueArray, Append To Array, Event Player.A);
 		Event Player.GoldCount -= Event Player.A;
-		Create Effect(All Players(All Teams), Orb, Global.GoldColor, Last Of(Global.GoldLootOrbPositionArray),
-			Global.GoldLootOrbVisualRadius, None);
+		disabled Create Effect(All Players(All Teams), Orb, Global.GoldColor, Last Of(Global.GoldLootOrbPositionArray),
+			Global.GoldLootOrbVisualRadius, Visible To);
+		Create Effect(All Players(All Teams), Orb, Global.GoldColor, Evaluate Once(Last Of(Global.GoldLootOrbPositionArray)),
+			Global.GoldLootOrbVisualRadius, Visible To);
 		Modify Global Variable(GoldLootOrbEffectArray, Append To Array, Last Created Entity);
 	}
 }
