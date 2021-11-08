@@ -390,9 +390,10 @@ rule("Init@Player: HUD")
 		Create Progress Bar HUD Text(Event Player.GoldBaseDepositTimer > 0 ? Event Player : Null, 100 * Min(1,
 			Event Player.GoldBaseDepositTimer / Global.PlayerGoldBaseDepositTimerMax), Custom String("Depositing Gold..."), Top, 1,
 			Global.GoldColor, Global.GoldColor, Visible To and Values, Default Visibility);
-		Create Progress Bar HUD Text(Event Player.GoldBaseDepositTimer > 0 ? Event Player : Null, 100 * Min(1,
-			Event Player.GoldBaseDepositTimer / Global.PlayerGoldBaseDepositTimerMax), Custom String("{0} / {1}"), Top, 1,
-			Global.GoldColor, Global.GoldColor, Visible To and Values, Default Visibility);
+		Create Progress Bar HUD Text(Event Player.ClosestHarvestingMine > -1 ? Event Player : Null, 100 * Min(1,
+			Global.MineGoldCountArray[Event Player.ClosestHarvestingMine] / Global.MineGoldMax), Custom String("{0} / {1}",
+			Global.MineGoldCountArray[Event Player.ClosestHarvestingMine], Global.MineGoldMax), Top, 1, Global.GoldColor, Global.GoldColor,
+			Visible To and Values, Default Visibility);
 	}
 }
 
@@ -455,11 +456,11 @@ rule("Update@Global: UpdateMinePlayerIntersection")
 
 	actions
 	{
+		Wait(0.100, Abort When False);
 		"Clear the \"closest GoldMine in range\" for all players."
 		For Global Variable(ArrayIteratorA, 0, Count Of(All Players(All Teams)), 1);
 			All Players(All Teams)[Global.ArrayIteratorA].ClosestHarvestingMine = -1;
 		End;
-		Wait(0.100, Abort When False);
 		"Loop through all GoldMines..."
 		For Global Variable(ArrayIteratorA, 0, Count Of(Global.MinePositionArray), 1);
 			"Update the list of players within range of this GoldMine."
@@ -474,12 +475,13 @@ rule("Update@Global: UpdateMinePlayerIntersection")
 				Global.B = Distance Between(Position Of(Global.A), Global.MinePositionArray[Global.ArrayIteratorA]);
 				Global.C = Global.A.ClosestHarvestingMine < 0 ? 99999 : Distance Between(Position Of(Global.A),
 					Global.MinePositionArray[Global.A.ClosestHarvestingMine]);
-				Log To Inspector(Custom String("P: {0}, NextDist: {1}, MinDist: {2}", Global.A, Global.B, Global.C));
+				disabled Log To Inspector(Custom String("P: {0}, NextDist: {1}, MinDist: {2}", Global.A, Global.B, Custom String("{0}, ClosestMine: {1}",
+					Global.C, Global.A.ClosestHarvestingMine)));
 				"If the distance is less than the previous smallest distance between the player and a GoldMine..."
 				If(Global.B < Global.C);
 					"Set it as the closest GoldMine for this player."
-					Global.A.ClosestHarvestingMine = Global.ArrayIteratorA;
-					Log To Inspector(Custom String("Set Closest Mine: Player: {0}, Mine: {1}", Global.A, Global.A.ClosestHarvestingMine));
+					Global.A.ClosestHarvestingMine = Evaluate Once(Global.ArrayIteratorA);
+					disabled Log To Inspector(Custom String("Set Closest Mine: Player: {0}, Mine: {1}", Global.A, Global.A.ClosestHarvestingMine));
 				End;
 			End;
 		End;
