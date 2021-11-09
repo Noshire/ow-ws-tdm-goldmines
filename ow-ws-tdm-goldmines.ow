@@ -32,6 +32,7 @@ settings
 	workshop
 	{
 		Debug Mode: On
+		Score Limit: 1000
 	}
 
 	extensions
@@ -142,7 +143,7 @@ rule("Init@Global: ApplyWorkshopSettings: General")
 
 	actions
 	{
-		Global.A = Workshop Setting Integer(Custom String("General"), Custom String("Score Limit"), 3000, 10, 100000, 0);
+		Global.A = Workshop Setting Integer(Custom String("General"), Custom String("Score Limit"), 1500, 10, 100000, 0);
 		Global.ScoreLimitTeamArray[0] = Global.A;
 		Global.ScoreLimitTeamArray[1] = Global.A;
 		Global.SpawnRadius = Workshop Setting Real(Custom String("General"), Custom String("Team Base Radius"), 5, 0.500, 15, 0);
@@ -184,7 +185,7 @@ rule("Init@Global: ApplyWorkshopSettings: Gold Mines")
 		Global.MineGoldMax = Workshop Setting Integer(Custom String("Gold Mines"), Custom String("Max. Gold per Mine"), 100, 10, 1000, 0);
 		Global.MineRadius = Workshop Setting Real(Custom String("Gold Mines"), Custom String("Radius"), 2.500, 0.500, 15, 0);
 		Global.MineGoldIncrementInterval = Workshop Setting Real(Custom String("Gold Mines"), Custom String(
-			"Gold Increase Interval in Seconds"), 5, 0.100, 60, 0);
+			"Gold Increase Interval in Seconds"), 10, 0.100, 60, 0);
 		Global.MineGoldIncrementAmount = Workshop Setting Integer(Custom String("Gold Mines"), Custom String("Gold Increase Amount"), 10,
 			1, 100, 0);
 		Global.MineGoldStart = Workshop Setting Integer(Custom String("Gold Mines"), Custom String("Initial Gold Amount"), 30, 0, 1000, 0);
@@ -249,10 +250,16 @@ rule("Init@Global: InitGameMode")
 		Ongoing - Global;
 	}
 
+	conditions
+	{
+		Is Game In Progress == True;
+	}
+
 	actions
 	{
 		Disable Built-In Game Mode Completion;
 		Disable Built-In Game Mode Scoring;
+		Pause Match Time;
 	}
 }
 
@@ -318,6 +325,7 @@ rule("Init@Player: InitPlayerVars")
 	actions
 	{
 		Event Player.GoldHarvestAmount = Global.PlayerGoldHarvestAmountBase;
+		Event Player.GoldCount = 0;
 	}
 }
 
@@ -552,7 +560,7 @@ rule("Update@Player: UpdateGoldBaseDeposit")
 					Global.ScoreTeamArray[Event Player.A] += Event Player.GoldCount;
 					Event Player.GoldCount = 0;
 					Event Player.GoldBaseDepositTimer = 0;
-					Play Effect(Event Player, Ana Biotic Grenade Increased Healing Sound, Color(White), Position Of(Global.D), 100);
+					Play Effect(Event Player, Buff Explosion Sound, Color(White), Position Of(Event Player), 100);
 				End;
 			End;
 		Else;
