@@ -84,9 +84,11 @@ variables
 	player:
 		26: TeamIndex
 		27: ClosestHarvestingMine
+		28: HUDArray
 		29: GoldCount
 		30: GoldHarvestAmount
 		31: GoldBaseDepositTimer
+		32: ArrayIteratorA
 }
 
 rule("DEBUG:Interact@Player: TeleportToRandomMine")
@@ -377,16 +379,24 @@ rule("Init@Player: HUD")
 
 	actions
 	{
-		Disable Game Mode HUD(Event Player);
+		"Clean up any previous HUD texts, e.g. after swapping teams."
+		For Player Variable(Event Player, ArrayIteratorA, 0, Count Of(Event Player.HUDArray), 1);
+			Destroy HUD Text(Event Player.HUDArray[Event Player.ArrayIteratorA]);
+		End;
+		Event Player.HUDArray = Array();
 		Create HUD Text(Event Player, Custom String("{0} {1} {0}", Icon String(Diamond), Event Player.GoldCount), Null, Null, Top, 0,
 			Global.GoldColor, Color(White), Color(White), Visible To and String, Default Visibility);
+		Modify Player Variable(Event Player, HUDArray, Append To Array, Last Text ID);
 		Create Progress Bar HUD Text(Event Player.GoldBaseDepositTimer > 0 ? Event Player : Null, 100 * Min(1,
 			Event Player.GoldBaseDepositTimer / Global.PlayerGoldBaseDepositTimerMax), Custom String("Depositing Gold..."), Top, 1,
 			Global.GoldColor, Global.GoldColor, Visible To and Values, Default Visibility);
+		Modify Player Variable(Event Player, HUDArray, Append To Array, Last Text ID);
 		Create Progress Bar HUD Text(Event Player.ClosestHarvestingMine > -1 ? Event Player : Null, 100 * Min(1,
 			Global.MineGoldCountArray[Event Player.ClosestHarvestingMine] / Global.MineGoldMax), Custom String("{0} / {1}",
 			Global.MineGoldCountArray[Event Player.ClosestHarvestingMine], Global.MineGoldMax), Top, 1, Global.GoldColor, Global.GoldColor,
 			Visible To and Values, Default Visibility);
+		Modify Player Variable(Event Player, HUDArray, Append To Array, Last Text ID);
+		Disable Game Mode HUD(Event Player);
 	}
 }
 
@@ -642,5 +652,35 @@ rule("OnDeath@Player: EnqueueGoldLootDrop")
 		"Enqueue a GoldLoot spawn command."
 		Global.GoldLootOrbSpawnQueue[Count Of(Global.GoldLootOrbSpawnQueue)] = Event Player.B;
 		Event Player.GoldCount -= Event Player.A;
+	}
+}
+
+rule("OnJoinedMatch@Player: Log")
+{
+	event
+	{
+		Player Joined Match;
+		All;
+		All;
+	}
+
+	actions
+	{
+		Log To Inspector(Custom String("Player {0} joined the match.", Event Player));
+	}
+}
+
+rule("OnLeftMatch@Player: Log")
+{
+	event
+	{
+		Player Left Match;
+		All;
+		All;
+	}
+
+	actions
+	{
+		Log To Inspector(Custom String("Player {0} left the match.", Event Player));
 	}
 }
