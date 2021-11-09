@@ -80,6 +80,7 @@ variables
 		51: GoldLootOrbEffectArray
 		52: GoldLootOrbCollectionRadius
 		53: GoldLootOrbVisualRadius
+		54: GoldLootOrbSpawnQueue
 
 	player:
 		26: TeamIndex
@@ -108,10 +109,7 @@ rule("DEBUG:Interact@Player: TeleportToRandomMine")
 
 	actions
 	{
-		disabled For Global Variable(ArrayIteratorA, 0, Count Of(Global.MinePositionArray), 1);
-		disabled Create Beam Effect(Event Player, Echo Focusing Beam, Event Player, Global.MinePositionArray[Global.ArrayIteratorA], Color(White),
-			Visible To Position and Radius);
-		disabled End;
+		disabled Create Effect(All Players(All Teams), Orb, Color(Red), Eye Position(Event Player), 0.200, Visible To);
 		Teleport(Event Player, Random Value In Array(Global.MinePositionArray));
 	}
 }
@@ -591,7 +589,35 @@ rule("Update@Player: UpdateGoldLootCollision")
 	}
 }
 
-rule("OnDeath@Player: DropGold")
+rule("Update@Global: SpawnGoldLoot")
+{
+	event
+	{
+		Ongoing - Global;
+	}
+
+	conditions
+	{
+		Is Game In Progress == True;
+	}
+
+	actions
+	{
+		Wait(0.016, Abort When False);
+		"We can't create the Orbs directly in the OnPlayerDeath event, else they get bound to that player and destroyed when the player leaves or swaps teams. This \"worker thread\" moves it into global scope."
+		For Global Variable(ArrayIteratorA, 0, Count Of(Global.GoldLootOrbSpawnQueue), 1);
+			Modify Global Variable(GoldLootOrbPositionArray, Append To Array, Global.GoldLootOrbSpawnQueue[Global.ArrayIteratorA][0]);
+			Modify Global Variable(GoldLootOrbValueArray, Append To Array, Global.GoldLootOrbSpawnQueue[Global.ArrayIteratorA][1]);
+			Create Effect(All Players(All Teams), Orb, Global.GoldColor, Global.GoldLootOrbSpawnQueue[Global.ArrayIteratorA][0],
+				Global.GoldLootOrbVisualRadius, Visible To);
+			Modify Global Variable(GoldLootOrbEffectArray, Append To Array, Last Created Entity);
+		End;
+		Global.GoldLootOrbSpawnQueue = Array();
+		Loop If Condition Is True;
+	}
+}
+
+rule("OnDeath@Player: EnqueueGoldLootDrop")
 {
 	event
 	{
@@ -600,18 +626,20 @@ rule("OnDeath@Player: DropGold")
 		All;
 	}
 
+	conditions
+	{
+		Is Game In Progress == True;
+	}
+
 	actions
 	{
 		Wait(0.250, Ignore Condition);
 		Event Player.A = Round To Integer(Event Player.GoldCount * Global.PlayerDeathGoldDropRatio, Down);
 		Abort If(Event Player.A == 0);
-		Modify Global Variable(GoldLootOrbPositionArray, Append To Array, Nearest Walkable Position(Position Of(Event Player)));
-		Modify Global Variable(GoldLootOrbValueArray, Append To Array, Event Player.A);
+		Event Player.B = Array(Evaluate Once(Nearest Walkable Position(Evaluate Once(Position Of(Event Player)))), Evaluate Once(
+			Event Player.A));
+		"Enqueue a GoldLoot spawn command."
+		Global.GoldLootOrbSpawnQueue[Count Of(Global.GoldLootOrbSpawnQueue)] = Event Player.B;
 		Event Player.GoldCount -= Event Player.A;
-		disabled Create Effect(All Players(All Teams), Orb, Global.GoldColor, Last Of(Global.GoldLootOrbPositionArray),
-			Global.GoldLootOrbVisualRadius, Visible To);
-		Create Effect(All Players(All Teams), Orb, Global.GoldColor, Evaluate Once(Last Of(Global.GoldLootOrbPositionArray)),
-			Global.GoldLootOrbVisualRadius, Visible To);
-		Modify Global Variable(GoldLootOrbEffectArray, Append To Array, Last Created Entity);
 	}
 }
