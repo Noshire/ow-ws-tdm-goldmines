@@ -29,6 +29,17 @@ settings
 		}
 	}
 
+	heroes
+	{
+		General
+		{
+			disabled heroes
+			{
+				Sombra
+			}
+		}
+	}
+
 	workshop
 	{
 		Debug Mode: On
