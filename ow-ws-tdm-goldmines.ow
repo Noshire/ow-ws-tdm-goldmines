@@ -31,7 +31,6 @@ settings
 
 	workshop
 	{
-		Death Loot Collection Radius: 0.500
 		Debug Mode: On
 	}
 
@@ -144,9 +143,9 @@ rule("Init@Global: ApplyWorkshopSettings: General")
 		Global.A = Workshop Setting Integer(Custom String("General"), Custom String("Score Limit"), 3000, 10, 100000, 0);
 		Global.ScoreLimitTeamArray[0] = Global.A;
 		Global.ScoreLimitTeamArray[1] = Global.A;
-		Global.SpawnRadius = Workshop Setting Real(Custom String("General"), Custom String("Team Base Radius in Meters"), 5, 0.500, 15, 0);
+		Global.SpawnRadius = Workshop Setting Real(Custom String("General"), Custom String("Team Base Radius"), 5, 0.500, 15, 0);
 		Global.GoldLootOrbCollectionRadius = Workshop Setting Real(Custom String("General"), Custom String("Death Loot Collection Radius"),
-			0.500, 0.100, 15, 0);
+			3, 0.500, 15, 0);
 		Global.GoldLootOrbVisualRadius = Workshop Setting Real(Custom String("General"), Custom String("Death Loot Visual Radius"), 0.350,
 			0.100, 15, 0);
 	}
@@ -574,6 +573,8 @@ rule("Update@Player: UpdateGoldLootCollision")
 	{
 		Wait(0.100, Abort When False);
 		For Global Variable(ArrayIteratorA, 0, Count Of(Global.GoldLootOrbPositionArray), 1);
+			disabled Log To Inspector(Custom String("{0}", Distance Between(Position Of(Event Player),
+				Global.GoldLootOrbPositionArray[Global.ArrayIteratorA])));
 			If(Distance Between(Position Of(Event Player), Global.GoldLootOrbPositionArray[Global.ArrayIteratorA])
 				<= Global.GoldLootOrbCollectionRadius + Global.RadiusPlayerProximityBuffer);
 				Destroy Effect(Global.GoldLootOrbEffectArray[Global.ArrayIteratorA]);
