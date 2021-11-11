@@ -71,6 +71,7 @@ variables
 		31: MineRadius
 		32: MineRespawnDuration
 		33: MineRespawnTimerArray
+		34: RespawningMineColor
 		35: ArrayIteratorB
 		36: DEBUG
 		37: MinePlayerIntersectionArray2D
@@ -195,8 +196,8 @@ rule("Init@Global: ApplyWorkshopSettings: Gold Mines")
 	{
 		Global.MineGoldMax = Workshop Setting Integer(Custom String("Gold Mines"), Custom String("Max. Gold per Mine"), 100, 10, 1000, 0);
 		Global.MineRadius = Workshop Setting Real(Custom String("Gold Mines"), Custom String("Radius"), 2.500, 0.500, 15, 0);
-		Global.MineRespawnDuration = Workshop Setting Real(Custom String("Gold Mines"), Custom String("Gold Increase Interval in Seconds"),
-			10, 0.100, 60, 0);
+		Global.MineRespawnDuration = Workshop Setting Real(Custom String("Gold Mines"), Custom String("Regeneration Duration in Seconds"),
+			30, 1, 300, 0);
 	}
 }
 
@@ -249,6 +250,7 @@ rule("Init@Global: InitGlobalVars")
 		Global.GoldColor = Custom Color(242, 255, 66, 255);
 		Global.ColorTeamArray = Array(Custom Color(39, 60, 219, 255), Custom Color(219, 39, 39, 255));
 		Global.UpdateInterval = 0.016;
+		Global.RespawningMineColor = Custom Color(18, 18, 18, 128);
 	}
 }
 
@@ -295,15 +297,19 @@ rule("Init@Global: InitMines")
 				0, 0, 0, 0) : (Count Of(Global.MinePlayerIntersectionArray2D[Evaluate Once(Global.ArrayIteratorA)]) == 0 ? Custom Color(242,
 				255, 66, 255) : Custom Color(219, 117, 39, 255)), Global.MinePositionArray[Global.ArrayIteratorA], Global.MineRadius,
 				Visible To and Color);
-			disabled Create Effect(All Players(All Teams), Sphere, Count Of(Global.MinePlayerIntersectionArray2D[Evaluate Once(Global.ArrayIteratorA)])
-				== 0 ? Custom Color(242, 255, 66, 255) : Custom Color(219, 117, 39, 255), Global.MinePositionArray[Global.ArrayIteratorA],
-				Global.MineRadius, Visible To and Color);
 			Create Beam Effect(Count Of(Global.MinePlayerIntersectionArray2D[Evaluate Once(Global.ArrayIteratorA)]) > 0 ? All Players(
 				All Teams) : Null, Omnic Slicer Beam, Global.MinePositionArray[Global.ArrayIteratorA] + Up * Global.MineRadius,
 				Global.MinePositionArray[Global.ArrayIteratorA] + Up * 100, Global.GoldColor, Visible To);
-			Create In-World Text(All Players(All Teams), Custom String("{0}/{1}", Global.MineGoldCountArray[Evaluate Once(
-				Global.ArrayIteratorA)], Global.MineGoldMax), Global.MinePositionArray[Global.ArrayIteratorA] + Up * 2.500, 1,
-				Clip Against Surfaces, Visible To and String, Color(White), Default Visibility);
+			Create Progress Bar In-World Text(Filtered Array(All Players(All Teams), !Array Contains(
+				Global.MinePlayerIntersectionArray2D[Evaluate Once(Global.ArrayIteratorA)], Current Array Element)),
+				Global.MineGoldCountArray[Evaluate Once(Global.ArrayIteratorA)] > 0 ? 100 * Global.MineGoldCountArray[Evaluate Once(
+				Global.ArrayIteratorA)] / Global.MineGoldMax : 100 * Global.MineRespawnTimerArray[Evaluate Once(Global.ArrayIteratorA)
+				] / Global.MineRespawnDuration, Global.MineGoldCountArray[Evaluate Once(Global.ArrayIteratorA)] > 0 ? Custom String("{0}/{1}",
+				Global.MineGoldCountArray[Evaluate Once(Global.ArrayIteratorA)], Global.MineGoldMax) : Custom String("Regenerating..."),
+				Global.MinePositionArray[Global.ArrayIteratorA] + Up * 2.500, 0.350, Clip Against Surfaces,
+				Global.MineGoldCountArray[Evaluate Once(Global.ArrayIteratorA)] > 0 ? Global.GoldColor : Global.RespawningMineColor,
+				Global.MineGoldCountArray[Evaluate Once(Global.ArrayIteratorA)] > 0 ? Global.GoldColor : Global.RespawningMineColor,
+				Visible To Values and Color, Default Visibility);
 		End;
 	}
 }
