@@ -69,9 +69,8 @@ variables
 		29: MineGoldMax
 		30: MineGoldCountArray
 		31: MineRadius
-		32: MineGoldIncrementInterval
-		33: MineGoldIncrementAmount
-		34: MineGoldStart
+		32: MineRespawnDuration
+		33: MineRespawnTimerArray
 		35: ArrayIteratorB
 		36: DEBUG
 		37: MinePlayerIntersectionArray2D
@@ -92,6 +91,7 @@ variables
 		52: GoldLootOrbCollectionRadius
 		53: GoldLootOrbVisualRadius
 		54: GoldLootOrbSpawnQueue
+		55: UpdateInterval
 
 	player:
 		26: TeamIndex
@@ -195,11 +195,8 @@ rule("Init@Global: ApplyWorkshopSettings: Gold Mines")
 	{
 		Global.MineGoldMax = Workshop Setting Integer(Custom String("Gold Mines"), Custom String("Max. Gold per Mine"), 100, 10, 1000, 0);
 		Global.MineRadius = Workshop Setting Real(Custom String("Gold Mines"), Custom String("Radius"), 2.500, 0.500, 15, 0);
-		Global.MineGoldIncrementInterval = Workshop Setting Real(Custom String("Gold Mines"), Custom String(
-			"Gold Increase Interval in Seconds"), 10, 0.100, 60, 0);
-		Global.MineGoldIncrementAmount = Workshop Setting Integer(Custom String("Gold Mines"), Custom String("Gold Increase Amount"), 10,
-			1, 100, 0);
-		Global.MineGoldStart = Workshop Setting Integer(Custom String("Gold Mines"), Custom String("Initial Gold Amount"), 30, 0, 1000, 0);
+		Global.MineRespawnDuration = Workshop Setting Real(Custom String("Gold Mines"), Custom String("Gold Increase Interval in Seconds"),
+			10, 0.100, 60, 0);
 	}
 }
 
@@ -251,6 +248,7 @@ rule("Init@Global: InitGlobalVars")
 		Global.RadiusPlayerProximityBuffer = 0.500;
 		Global.GoldColor = Custom Color(242, 255, 66, 255);
 		Global.ColorTeamArray = Array(Custom Color(39, 60, 219, 255), Custom Color(219, 39, 39, 255));
+		Global.UpdateInterval = 0.016;
 	}
 }
 
@@ -291,12 +289,17 @@ rule("Init@Global: InitMines")
 		For Global Variable(ArrayIteratorA, 0, Count Of(Global.MinePositionArray), 1);
 			Log To Inspector(Custom String("Mine at: {0}", Global.MinePositionArray[Global.ArrayIteratorA]));
 			Global.ArrayIteratorB = Global.MineGoldCountArray[Global.ArrayIteratorA];
-			Global.MineGoldCountArray[Global.ArrayIteratorA] = Global.MineGoldStart;
-			Create Effect(All Players(All Teams), Sphere, Count Of(Global.MinePlayerIntersectionArray2D[Evaluate Once(Global.ArrayIteratorA)])
+			Global.MineRespawnTimerArray[Global.ArrayIteratorA] = 0;
+			Global.MineGoldCountArray[Global.ArrayIteratorA] = Global.MineGoldMax;
+			Create Effect(All Players(All Teams), Sphere, Global.MineGoldCountArray[Evaluate Once(Global.ArrayIteratorA)] == 0 ? Custom Color(
+				0, 0, 0, 0) : (Count Of(Global.MinePlayerIntersectionArray2D[Evaluate Once(Global.ArrayIteratorA)]) == 0 ? Custom Color(242,
+				255, 66, 255) : Custom Color(219, 117, 39, 255)), Global.MinePositionArray[Global.ArrayIteratorA], Global.MineRadius,
+				Visible To and Color);
+			disabled Create Effect(All Players(All Teams), Sphere, Count Of(Global.MinePlayerIntersectionArray2D[Evaluate Once(Global.ArrayIteratorA)])
 				== 0 ? Custom Color(242, 255, 66, 255) : Custom Color(219, 117, 39, 255), Global.MinePositionArray[Global.ArrayIteratorA],
 				Global.MineRadius, Visible To and Color);
-			Create Beam Effect(Global.MineGoldCountArray[Evaluate Once(Global.ArrayIteratorA)] >= Global.MineGoldMax ? All Players(All Teams)
-				: Null, Omnic Slicer Beam, Global.MinePositionArray[Global.ArrayIteratorA] + Up * Global.MineRadius,
+			Create Beam Effect(Count Of(Global.MinePlayerIntersectionArray2D[Evaluate Once(Global.ArrayIteratorA)]) > 0 ? All Players(
+				All Teams) : Null, Omnic Slicer Beam, Global.MinePositionArray[Global.ArrayIteratorA] + Up * Global.MineRadius,
 				Global.MinePositionArray[Global.ArrayIteratorA] + Up * 100, Global.GoldColor, Visible To);
 			Create In-World Text(All Players(All Teams), Custom String("{0}/{1}", Global.MineGoldCountArray[Evaluate Once(
 				Global.ArrayIteratorA)], Global.MineGoldMax), Global.MinePositionArray[Global.ArrayIteratorA] + Up * 2.500, 1,
@@ -443,7 +446,7 @@ rule("Respawn@Player: TeleportToSpawn")
 	}
 }
 
-rule("Update@Global: UpdateMines")
+rule("Update@Global: UpdateMineRespawn")
 {
 	event
 	{
@@ -457,11 +460,17 @@ rule("Update@Global: UpdateMines")
 
 	actions
 	{
-		Wait(Global.MineGoldIncrementInterval, Abort When False);
-		disabled Log To Inspector(Custom String("Increment Gold in all Mines by {0}", Global.MineGoldIncrementAmount));
-		For Global Variable(ArrayIteratorA, 0, Count Of(Global.MineGoldCountArray), 1);
-			Global.MineGoldCountArray[Global.ArrayIteratorA] = Min(Global.MineGoldMax,
-				Global.MineGoldCountArray[Global.ArrayIteratorA] + Global.MineGoldIncrementAmount);
+		Wait(Global.UpdateInterval, Abort When False);
+		For Global Variable(ArrayIteratorA, 0, Count Of(Global.MineRespawnTimerArray), 1);
+			If(Global.MineGoldCountArray[Global.ArrayIteratorA] <= 0);
+				Global.MineRespawnTimerArray[Global.ArrayIteratorA] = Min(Global.MineRespawnDuration,
+					Global.MineRespawnTimerArray[Global.ArrayIteratorA] + Global.UpdateInterval);
+				"If timer is complete, refill the gold."
+				If(Global.MineRespawnTimerArray[Global.ArrayIteratorA] >= Global.MineRespawnDuration);
+					Global.MineRespawnTimerArray[Global.ArrayIteratorA] = 0;
+					Global.MineGoldCountArray[Global.ArrayIteratorA] = Global.MineGoldMax;
+				End;
+			End;
 		End;
 		Loop If Condition Is True;
 	}
@@ -490,7 +499,8 @@ rule("Update@Global: UpdateMinePlayerIntersection")
 		For Global Variable(ArrayIteratorA, 0, Count Of(Global.MinePositionArray), 1);
 			"Update the list of players within range of this GoldMine."
 			Global.MinePlayerIntersectionArray2D[Global.ArrayIteratorA] = Filtered Array(All Players(All Teams), Has Spawned(
-				Current Array Element) && Is Alive(Current Array Element) && Distance Between(Global.MinePositionArray[Global.ArrayIteratorA],
+				Current Array Element) && Is Alive(Current Array Element)
+				&& Global.MineGoldCountArray[Global.ArrayIteratorA] > 0 && Distance Between(Global.MinePositionArray[Global.ArrayIteratorA],
 				Position Of(Current Array Element)) <= Global.MineRadius + Global.RadiusPlayerProximityBuffer);
 			"Loop through all players in range of this GoldMine..."
 			For Global Variable(ArrayIteratorB, 0, Count Of(Global.MinePlayerIntersectionArray2D[Global.ArrayIteratorA]), 1);
@@ -537,7 +547,7 @@ rule("Update@Global: UpdateMinePlayerHarvest")
 					Global.D.GoldCount += Global.C;
 					Global.MineGoldCountArray[Global.ArrayIteratorA] -= Global.C;
 					Play Effect(Global.D, Buff Explosion Sound, Color(White), Position Of(Global.D), 100);
-					Log To Inspector(Custom String("Player {0} Harvests {1} Gold from Mine {2}", Global.D, Global.C, Global.ArrayIteratorA));
+					disabled Log To Inspector(Custom String("Player {0} Harvests {1} Gold from Mine {2}", Global.D, Global.C, Global.ArrayIteratorA));
 				End;
 			End;
 		End;
