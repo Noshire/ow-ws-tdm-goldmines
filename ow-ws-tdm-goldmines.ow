@@ -43,7 +43,6 @@ settings
 	workshop
 	{
 		Debug Mode: On
-		Score Limit: 100
 	}
 
 	extensions
@@ -93,6 +92,8 @@ variables
 		53: GoldLootOrbVisualRadius
 		54: GoldLootOrbSpawnQueue
 		55: UpdateInterval
+		56: PlayerGoldDepositPerFrame
+		57: BaseColor
 
 	player:
 		26: TeamIndex
@@ -103,6 +104,7 @@ variables
 		31: EnterBaseTimer
 		32: ArrayIteratorA
 		33: IsInBase
+		34: GoldDepositSoundEffectId
 }
 
 rule("DEBUG:Interact@Player: TeleportToRandomMine")
@@ -179,7 +181,7 @@ rule("Init@Global: ApplyWorkshopSettings: Players")
 		Global.PlayerGoldHarvestInterval = Workshop Setting Real(Custom String("Players"), Custom String(
 			"Gold Harvest Interval in Seconds"), 0.500, 0.050, 60, 0);
 		Global.PlayerGoldHarvestAmountBase = Workshop Setting Integer(Custom String("Players"), Custom String("Gold Harvest Amount Base"),
-			3, 0, 1000, 0);
+			5, 0, 1000, 0);
 		Global.PlayerEnterBaseTimerMax = Workshop Setting Real(Custom String("Players"), Custom String("Gold Deposit Timer in Seconds"), 3,
 			0, 60, 0);
 		Global.PlayerDeathGoldDropRatio = Workshop Setting Real(Custom String("Players"), Custom String("Gold Drop Ratio"), 1, 0, 1, 0);
@@ -250,8 +252,10 @@ rule("Init@Global: InitGlobalVars")
 		Global.RadiusPlayerProximityBuffer = 0.500;
 		Global.GoldColor = Custom Color(242, 255, 66, 255);
 		Global.ColorTeamArray = Array(Custom Color(39, 60, 219, 255), Custom Color(219, 39, 39, 255));
-		Global.UpdateInterval = 0.016;
+		Global.BaseColor = Custom Color(125, 255, 251, 255);
 		Global.RespawningMineColor = Custom Color(18, 18, 18, 128);
+		Global.UpdateInterval = 0.016;
+		Global.PlayerGoldDepositPerFrame = 1;
 	}
 }
 
@@ -412,6 +416,7 @@ rule("Init@Player: HUD")
 
 	actions
 	{
+		Disable Game Mode HUD(Event Player);
 		"Clean up any previous HUD texts, e.g. after swapping teams."
 		For Player Variable(Event Player, ArrayIteratorA, 0, Count Of(Event Player.HUDArray), 1);
 			Destroy HUD Text(Event Player.HUDArray[Event Player.ArrayIteratorA]);
@@ -421,17 +426,17 @@ rule("Init@Player: HUD")
 			Global.GoldColor, Color(White), Color(White), Visible To and String, Default Visibility);
 		Modify Player Variable(Event Player, HUDArray, Append To Array, Last Text ID);
 		Create Progress Bar HUD Text(Event Player.EnterBaseTimer > 0 ? Event Player : Null, 100 * Min(1,
-			Event Player.EnterBaseTimer / Global.PlayerEnterBaseTimerMax), Custom String("Entering Base..."), Top, 1, Global.GoldColor,
-			Global.GoldColor, Visible To and Values, Default Visibility);
+			Event Player.EnterBaseTimer / Global.PlayerEnterBaseTimerMax), Custom String("Entering Base..."), Top, 1, Global.BaseColor,
+			Global.BaseColor, Visible To Values and Color, Default Visibility);
 		Modify Player Variable(Event Player, HUDArray, Append To Array, Last Text ID);
 		Create Progress Bar HUD Text(Event Player.ClosestHarvestingMine > -1 ? Event Player : Null, 100 * Min(1,
 			Global.MineGoldCountArray[Event Player.ClosestHarvestingMine] / Global.MineGoldMax), Custom String("{0} / {1}",
 			Global.MineGoldCountArray[Event Player.ClosestHarvestingMine], Global.MineGoldMax), Top, 1, Global.GoldColor, Global.GoldColor,
 			Visible To and Values, Default Visibility);
 		Modify Player Variable(Event Player, HUDArray, Append To Array, Last Text ID);
-		Disable Game Mode HUD(Event Player);
 		Create HUD Text(Event Player.IsInBase == True ? Event Player : Null, Custom String("{0} IN BASE {0}", Ability Icon String(Hero(
-			Winston), Button(Ability 2))), Null, Null, Top, 2, Color(White), Color(White), Color(White), Visible To, Default Visibility);
+			Winston), Button(Ability 2))), Null, Null, Top, 2, Global.BaseColor, Global.BaseColor, Global.BaseColor, Visible To,
+			Default Visibility);
 		Modify Player Variable(Event Player, HUDArray, Append To Array, Last Text ID);
 	}
 }
@@ -563,10 +568,8 @@ rule("Update@Player: UpdateIsInBase")
 	actions
 	{
 		Wait(Global.UpdateInterval, Abort When False);
-		"Get EventPlayer's team index."
-		Event Player.A = Team Of(Event Player) == Team 1 ? 0 : 1;
 		"Get EventPlayer's team base location."
-		Event Player.B = Global.SpawnPositionTeamArray[Event Player.A];
+		Event Player.B = Global.SpawnPositionTeamArray[Event Player.TeamIndex];
 		"Bool indicating whether the event player is in the radius of their base."
 		Event Player.C = Distance Between(Event Player.B, Position Of(Event Player))
 			<= Global.SpawnRadius + Global.RadiusPlayerProximityBuffer;
@@ -787,32 +790,6 @@ rule("OnScoreChanged@Team2: CheckWinCondition")
 	}
 }
 
-rule("OnBaseEntered@Player: DepositGold")
-{
-	event
-	{
-		Ongoing - Each Player;
-		All;
-		All;
-	}
-
-	conditions
-	{
-		Is Game In Progress == True;
-		Is Alive(Event Player) == True;
-		Has Spawned(Event Player) == True;
-		Event Player.IsInBase == True;
-		Event Player.GoldCount > 0;
-	}
-
-	actions
-	{
-		Global.ScoreTeamArray[Event Player.A] += Event Player.GoldCount;
-		Event Player.GoldCount = 0;
-		Play Effect(Event Player, Buff Explosion Sound, Color(White), Position Of(Event Player), 100);
-	}
-}
-
 rule("OnBaseEntered@Player: Shelter")
 {
 	event
@@ -825,14 +802,15 @@ rule("OnBaseEntered@Player: Shelter")
 	conditions
 	{
 		Event Player.IsInBase == True;
+		Is Alive(Event Player) == True;
+		Has Spawned(Event Player) == True;
 	}
 
 	actions
 	{
 		Set Invisible(Event Player, Enemies);
 		Set Status(Event Player, Null, Invincible, 9999);
-		disabled Communicate(Event Player, Defending);
-		Play Effect(All Players(All Teams), Sombra Translocator Disappear Effect, Color(White), Event Player, 1);
+		Start Heal Over Time(Event Player, Event Player, 9999, 25);
 	}
 }
 
@@ -854,5 +832,38 @@ rule("OnBaseLeft@Player: Unshelter")
 	{
 		Set Invisible(Event Player, None);
 		Clear Status(Event Player, Invincible);
+		Stop All Heal Over Time(Event Player);
+	}
+}
+
+rule("Update@Player: DepositGoldInBase")
+{
+	event
+	{
+		Ongoing - Each Player;
+		All;
+		All;
+	}
+
+	conditions
+	{
+		Is Game In Progress == True;
+		Is Alive(Event Player) == True;
+		Event Player.IsInBase == True;
+		Event Player.GoldCount > 0;
+	}
+
+	actions
+	{
+		Create Effect(Event Player, Energy Sound, Color(White), Eye Position(Event Player), 200, Visible To Position and Radius);
+		Event Player.GoldDepositSoundEffectId = Last Created Entity;
+		While(True);
+			Wait(Global.UpdateInterval, Abort When False);
+			Abort If Condition Is False;
+			Event Player.A = Min(Global.PlayerGoldDepositPerFrame, Event Player.GoldCount);
+			Event Player.GoldCount -= Event Player.A;
+			Global.ScoreTeamArray[Event Player.TeamIndex] += Event Player.A;
+		End;
+		Destroy Effect(Event Player.GoldDepositSoundEffectId);
 	}
 }
