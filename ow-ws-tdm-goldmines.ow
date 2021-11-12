@@ -722,3 +722,41 @@ rule("OnLeftMatch@Player: Log")
 		Log To Inspector(Custom String("Player {0} left the match.", Event Player));
 	}
 }
+
+rule("OnScoreChanged@Team1: CheckWinCondition")
+{
+	event
+	{
+		Ongoing - Global;
+	}
+
+	conditions
+	{
+		Is Game In Progress == True;
+		Global.ScoreTeamArray[0] >= Global.ScoreLimitTeamArray[0];
+	}
+
+	actions
+	{
+		Declare Team Victory(Team 1);
+	}
+}
+
+rule("OnScoreChanged@Team2: CheckWinCondition")
+{
+	event
+	{
+		Ongoing - Global;
+	}
+
+	conditions
+	{
+		Is Game In Progress == True;
+		Global.ScoreTeamArray[1] >= Global.ScoreLimitTeamArray[1];
+	}
+
+	actions
+	{
+		Declare Team Victory(Team 2);
+	}
+}
