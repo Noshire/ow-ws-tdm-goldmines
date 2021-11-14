@@ -2,7 +2,8 @@ settings
 {
 	main
 	{
-		Mode Name: "Goldmine TDM"
+		Description: "Drain Energy from Rifts around the \r\nbattlefield and return it to your base.\r\nDefeat your foes to steal their Energy!"
+		Mode Name: "Rift Raiders"
 	}
 
 	lobby
@@ -95,6 +96,8 @@ variables
 		56: PlayerGoldDepositPerFrame
 		57: BaseColor
 		58: GoldName
+		59: GoldColorHarvesting
+		60: GoldColorExhausted
 		63: TeamGoldHarvestAmountFactorArray
 		64: EnableGoldHarvestBalancing
 		66: GoldLootOrbTextArray
@@ -111,6 +114,7 @@ variables
 		34: GoldDepositSoundEffectId
 		35: UltimateCharge
 		36: IsViewingTutorial
+		37: EffectArray
 }
 
 subroutines
@@ -202,7 +206,6 @@ rule("DEBUG:Interact@Player: TeleportToRandomMine")
 
 	actions
 	{
-		disabled Create Effect(All Players(All Teams), Orb, Color(Red), Eye Position(Event Player), 0.200, Visible To);
 		Teleport(Event Player, Random Value In Array(Global.MinePositionArray));
 	}
 }
@@ -258,8 +261,8 @@ rule("Init@Global: ApplyWorkshopSettings: Players")
 			"Gold Harvest Interval in Seconds"), 0.500, 0.050, 60, 0);
 		Global.PlayerGoldHarvestAmountBase = Workshop Setting Integer(Custom String("Players"), Custom String("Gold Harvest Amount Base"),
 			10, 0, 1000, 0);
-		Global.PlayerEnterBaseTimerMax = Workshop Setting Real(Custom String("Players"), Custom String("Gold Deposit Timer in Seconds"), 3,
-			0, 60, 0);
+		Global.PlayerEnterBaseTimerMax = Workshop Setting Real(Custom String("Players"), Custom String("Gold Deposit Timer in Seconds"),
+			3.500, 0, 60, 0);
 		Global.PlayerDeathGoldDropRatio = Workshop Setting Real(Custom String("Players"), Custom String("Gold Drop Ratio"), 1, 0, 1, 0);
 		Global.PlayerGoldDepositPerFrame = Workshop Setting Integer(Custom String("Player"), Custom String("Gold Deposit Speed"), 5, 1,
 			100000, 0);
@@ -328,13 +331,15 @@ rule("Init@Global: InitGlobalVars")
 		Global.TeamArray = Array(Team 1, Team 2);
 		Global.ScoreTeamArray = Array(0, 0);
 		Global.RadiusPlayerProximityBuffer = 0.500;
-		Global.GoldColor = Custom Color(242, 255, 66, 255);
+		Global.GoldColor = Custom Color(206, 23, 209, 255);
+		Global.GoldColorHarvesting = Custom Color(232, 187, 102, 255);
+		Global.GoldColorExhausted = Custom Color(0, 0, 0, 0);
 		Global.ColorTeamArray = Array(Custom Color(39, 60, 219, 255), Custom Color(219, 39, 39, 255));
 		Global.BaseColor = Custom Color(125, 255, 251, 255);
 		Global.RespawningMineColor = Custom Color(18, 18, 18, 128);
 		Global.UpdateInterval = 0.016;
 		Call Subroutine(CalculateTeamHandicap);
-		Global.GoldName = Custom String("Gold");
+		Global.GoldName = Custom String("Energy");
 	}
 }
 
@@ -377,13 +382,13 @@ rule("Init@Global: InitMines")
 			Global.ArrayIteratorB = Global.MineGoldCountArray[Global.ArrayIteratorA];
 			Global.MineRespawnTimerArray[Global.ArrayIteratorA] = 0;
 			Global.MineGoldCountArray[Global.ArrayIteratorA] = Global.MineGoldMax;
-			Create Effect(All Players(All Teams), Sphere, Global.MineGoldCountArray[Evaluate Once(Global.ArrayIteratorA)] == 0 ? Custom Color(
-				0, 0, 0, 0) : (Count Of(Global.MinePlayerIntersectionArray2D[Evaluate Once(Global.ArrayIteratorA)]) == 0 ? Custom Color(242,
-				255, 66, 255) : Custom Color(219, 117, 39, 255)), Global.MinePositionArray[Global.ArrayIteratorA], Global.MineRadius,
+			Create Effect(All Players(All Teams), Sphere, Global.MineGoldCountArray[Evaluate Once(Global.ArrayIteratorA)
+				] == 0 ? Global.GoldColorExhausted : (Count Of(Global.MinePlayerIntersectionArray2D[Evaluate Once(Global.ArrayIteratorA)])
+				== 0 ? Global.GoldColor : Global.GoldColorHarvesting), Global.MinePositionArray[Global.ArrayIteratorA], Global.MineRadius,
 				Visible To and Color);
 			Create Beam Effect(Count Of(Global.MinePlayerIntersectionArray2D[Evaluate Once(Global.ArrayIteratorA)]) > 0 ? All Players(
-				All Teams) : Null, Omnic Slicer Beam, Global.MinePositionArray[Global.ArrayIteratorA] + Up * Global.MineRadius,
-				Global.MinePositionArray[Global.ArrayIteratorA] + Up * 100, Global.GoldColor, Visible To);
+				All Teams) : Null, Moira Coalescence Beam, Global.MinePositionArray[Global.ArrayIteratorA] + Up * 100,
+				Global.MinePositionArray[Global.ArrayIteratorA] + Up * Global.MineRadius, Global.GoldColor, Visible To);
 			Create Progress Bar In-World Text(Filtered Array(All Players(All Teams), !Array Contains(
 				Global.MinePlayerIntersectionArray2D[Evaluate Once(Global.ArrayIteratorA)], Current Array Element)),
 				Global.MineGoldCountArray[Evaluate Once(Global.ArrayIteratorA)] > 0 ? 100 * Global.MineGoldCountArray[Evaluate Once(
@@ -479,24 +484,6 @@ rule("Init@Player: SetTeamIndex")
 	}
 }
 
-rule("Init@Global:TutorialHUD")
-{
-	event
-	{
-		Ongoing - Global;
-	}
-
-	actions
-	{
-		disabled Create HUD Text(Filtered Array(All Players(All Teams), Current Array Element.IsViewingTutorial == True), Custom String(
-			"Tutorial Text"), Null, Null, Left, 100, Color(White), Color(White), Color(White), Visible To, Default Visibility);
-		Create In-World Text(Filtered Array(All Players(All Teams), Current Array Element.IsViewingTutorial == True), Custom String(
-			"The first team to collect {0} {1} wins.\r\nStand inside the yellow orbs to mine {1},\r\nthen bring it back to your team's base.",
-			Global.ScoreLimit, Global.GoldName), Vector(327.354, 50, -38.443) + Forward * 15, 1, Do Not Clip, Visible To, Color(White),
-			Default Visibility);
-	}
-}
-
 rule("Init@Player: HUD")
 {
 	event
@@ -540,6 +527,36 @@ rule("Init@Player: HUD")
 			Custom String("Crouch for Tutorial"), Null, Top, 3, Global.BaseColor, Global.BaseColor, Global.BaseColor, Visible To,
 			Default Visibility);
 		Modify Player Variable(Event Player, HUDArray, Append To Array, Last Text ID);
+	}
+}
+
+rule("Init@Player: Effects")
+{
+	event
+	{
+		Ongoing - Each Player;
+		All;
+		All;
+	}
+
+	conditions
+	{
+		Is Game In Progress == True;
+	}
+
+	actions
+	{
+		"Clean up any previous HUD texts, e.g. after swapping teams."
+		For Player Variable(Event Player, ArrayIteratorA, 0, Count Of(Event Player.EffectArray), 1);
+			Destroy Effect(Event Player.EffectArray[Event Player.ArrayIteratorA]);
+		End;
+		Event Player.EffectArray = Array();
+		Create Effect(Event Player.IsInBase == True ? All Players(All Teams) : Null, Echo Cloning Effect, Custom Color(150, 150, 150, 150),
+			Event Player, 3, Visible To Position and Radius);
+		Modify Player Variable(Event Player, EffectArray, Append To Array, Last Created Entity);
+		Create Effect(Event Player.IsInBase == True ? All Players(All Teams) : Null, Lúcio Sound Barrier Protected Effect, Custom Color(
+			150, 150, 150, 150), Event Player, 3, Visible To Position and Radius);
+		Modify Player Variable(Event Player, EffectArray, Append To Array, Last Created Entity);
 	}
 }
 
@@ -920,8 +937,8 @@ rule("OnBaseEntered@Player: Shelter")
 	actions
 	{
 		Event Player.UltimateCharge = Ultimate Charge Percent(Event Player);
-		Set Invisible(Event Player, Enemies);
-		Set Status(Event Player, Null, Invincible, 9999);
+		disabled Set Invisible(Event Player, Enemies);
+		Set Status(Event Player, Null, Phased Out, 9999);
 		Start Heal Over Time(Event Player, Event Player, 9999, 25);
 		Set Ability 1 Enabled(Event Player, False);
 		Set Ability 2 Enabled(Event Player, False);
@@ -949,7 +966,7 @@ rule("OnBaseLeft@Player: Unshelter")
 	actions
 	{
 		Set Invisible(Event Player, None);
-		Clear Status(Event Player, Invincible);
+		Clear Status(Event Player, Phased Out);
 		Stop All Heal Over Time(Event Player);
 		Set Ability 1 Enabled(Event Player, True);
 		Set Ability 2 Enabled(Event Player, True);
@@ -1089,5 +1106,37 @@ rule("OnIsViewingTutorialFalse@Player: Hide Tutorial")
 	{
 		Stop Camera(Event Player);
 		Enable Hero HUD(Event Player);
+	}
+}
+
+rule("Init@Global:TutorialHUD")
+{
+	event
+	{
+		Ongoing - Global;
+	}
+
+	actions
+	{
+		Global.A = Vector(327.354, 50, -38.443) + Forward * 5;
+		Create In-World Text(Filtered Array(All Players(All Teams), Current Array Element.IsViewingTutorial == True), Custom String(
+			"Welcome to Rift Raiders!"), Global.A + Up * 2.250, 2, Do Not Clip, Visible To, Color(White), Default Visibility);
+		Create In-World Text(Filtered Array(All Players(All Teams), Current Array Element.IsViewingTutorial == True), Custom String(
+			"Drain {0} from Rifts around the\r\nbattlefield and return it to your base.\r\nDefeat your foes to steal their {0}!",
+			Global.GoldName), Global.A + Up * 1.250, 2, Do Not Clip, Visible To, Color(White), Default Visibility);
+		Create In-World Text(Filtered Array(All Players(All Teams), Current Array Element.IsViewingTutorial == True), Custom String(
+			"The first team to collect {0} {1} wins.\r\nStand inside the Rifts to mine {1},\r\nthen bring it back to your team's base.",
+			Global.ScoreLimit, Global.GoldName), Global.A + Up * 0, 2, Do Not Clip, Visible To, Color(White), Default Visibility);
+		Global.B = Global.PlayerDeathGoldDropRatio == 1 ? Custom String("all") : Custom String("{0}% of",
+			100 * Global.PlayerDeathGoldDropRatio);
+		Create In-World Text(Filtered Array(All Players(All Teams), Current Array Element.IsViewingTutorial == True), Custom String(
+			"If you are defeated, you will drop {0}\r\nyour {1}, and others can pick it up!", Global.B, Global.GoldName),
+			Global.A + Up * -1, 2, Do Not Clip, Visible To, Color(White), Default Visibility);
+		Create In-World Text(Filtered Array(All Players(All Teams), Current Array Element.IsViewingTutorial == True), Custom String(
+			"Once depleted, a Rift takes {0} seconds\r\nto recharge before it can be drained again.", Global.MineRespawnDuration),
+			Global.A + Up * -2, 2, Do Not Clip, Visible To, Color(White), Default Visibility);
+		Create In-World Text(Filtered Array(All Players(All Teams), Current Array Element.IsViewingTutorial == True), Custom String(
+			"It takes {0} seconds to enter your base. While\r\nin your base, you are invulnerable, get healed\r\nand can not use any abilities.",
+			Global.PlayerEnterBaseTimerMax), Global.A + Up * -3.250, 2, Do Not Clip, Visible To, Color(White), Default Visibility);
 	}
 }
