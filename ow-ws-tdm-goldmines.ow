@@ -811,6 +811,12 @@ rule("OnBaseEntered@Player: Shelter")
 		Set Invisible(Event Player, Enemies);
 		Set Status(Event Player, Null, Invincible, 9999);
 		Start Heal Over Time(Event Player, Event Player, 9999, 25);
+		Set Ability 1 Enabled(Event Player, False);
+		Set Ability 2 Enabled(Event Player, False);
+		Set Melee Enabled(Event Player, False);
+		Set Ultimate Ability Enabled(Event Player, False);
+		Set Primary Fire Enabled(Event Player, False);
+		Set Secondary Fire Enabled(Event Player, False);
 	}
 }
 
@@ -833,6 +839,12 @@ rule("OnBaseLeft@Player: Unshelter")
 		Set Invisible(Event Player, None);
 		Clear Status(Event Player, Invincible);
 		Stop All Heal Over Time(Event Player);
+		Set Ability 1 Enabled(Event Player, True);
+		Set Ability 2 Enabled(Event Player, True);
+		Set Melee Enabled(Event Player, True);
+		Set Ultimate Ability Enabled(Event Player, True);
+		Set Primary Fire Enabled(Event Player, True);
+		Set Secondary Fire Enabled(Event Player, True);
 	}
 }
 
