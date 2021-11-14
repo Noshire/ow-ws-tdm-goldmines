@@ -94,6 +94,8 @@ variables
 		55: UpdateInterval
 		56: PlayerGoldDepositPerFrame
 		57: BaseColor
+		63: TeamGoldHarvestAmountFactorArray
+		64: EnableGoldHarvestBalancing
 
 	player:
 		26: TeamIndex
@@ -105,6 +107,13 @@ variables
 		32: ArrayIteratorA
 		33: IsInBase
 		34: GoldDepositSoundEffectId
+		35: UltimateCharge
+}
+
+subroutines
+{
+	0: CalculateTeamHandicap
+}
 }
 
 rule("DEBUG:Interact@Player: TeleportToRandomMine")
@@ -158,7 +167,7 @@ rule("Init@Global: ApplyWorkshopSettings: General")
 
 	actions
 	{
-		Global.A = Workshop Setting Integer(Custom String("General"), Custom String("Score Limit"), 1500, 10, 100000, 0);
+		Global.A = Workshop Setting Integer(Custom String("General"), Custom String("Score Limit"), 3000, 10, 100000, 0);
 		Global.ScoreLimitTeamArray[0] = Global.A;
 		Global.ScoreLimitTeamArray[1] = Global.A;
 		Global.SpawnRadius = Workshop Setting Real(Custom String("General"), Custom String("Team Base Radius"), 5, 0.500, 15, 0);
@@ -166,6 +175,8 @@ rule("Init@Global: ApplyWorkshopSettings: General")
 			3, 0.500, 15, 0);
 		Global.GoldLootOrbVisualRadius = Workshop Setting Real(Custom String("General"), Custom String("Death Loot Visual Radius"), 0.350,
 			0.100, 15, 0);
+		Global.EnableGoldHarvestBalancing = Workshop Setting Toggle(Custom String("General"), Custom String(
+			"Gold Harvest Auto-Balancing (smaller teams harvest faster)"), True, 0);
 	}
 }
 
@@ -181,10 +192,12 @@ rule("Init@Global: ApplyWorkshopSettings: Players")
 		Global.PlayerGoldHarvestInterval = Workshop Setting Real(Custom String("Players"), Custom String(
 			"Gold Harvest Interval in Seconds"), 0.500, 0.050, 60, 0);
 		Global.PlayerGoldHarvestAmountBase = Workshop Setting Integer(Custom String("Players"), Custom String("Gold Harvest Amount Base"),
-			5, 0, 1000, 0);
+			10, 0, 1000, 0);
 		Global.PlayerEnterBaseTimerMax = Workshop Setting Real(Custom String("Players"), Custom String("Gold Deposit Timer in Seconds"), 3,
 			0, 60, 0);
 		Global.PlayerDeathGoldDropRatio = Workshop Setting Real(Custom String("Players"), Custom String("Gold Drop Ratio"), 1, 0, 1, 0);
+		Global.PlayerGoldDepositPerFrame = Workshop Setting Integer(Custom String("Player"), Custom String("Gold Deposit Speed"), 5, 1,
+			100000, 0);
 	}
 }
 
@@ -197,7 +210,7 @@ rule("Init@Global: ApplyWorkshopSettings: Gold Mines")
 
 	actions
 	{
-		Global.MineGoldMax = Workshop Setting Integer(Custom String("Gold Mines"), Custom String("Max. Gold per Mine"), 100, 10, 1000, 0);
+		Global.MineGoldMax = Workshop Setting Integer(Custom String("Gold Mines"), Custom String("Max. Gold per Mine"), 200, 10, 1000, 0);
 		Global.MineRadius = Workshop Setting Real(Custom String("Gold Mines"), Custom String("Radius"), 2.500, 0.500, 15, 0);
 		Global.MineRespawnDuration = Workshop Setting Real(Custom String("Gold Mines"), Custom String("Regeneration Duration in Seconds"),
 			30, 1, 300, 0);
@@ -255,7 +268,7 @@ rule("Init@Global: InitGlobalVars")
 		Global.BaseColor = Custom Color(125, 255, 251, 255);
 		Global.RespawningMineColor = Custom Color(18, 18, 18, 128);
 		Global.UpdateInterval = 0.016;
-		Global.PlayerGoldDepositPerFrame = 1;
+		Call Subroutine(CalculateTeamHandicap);
 	}
 }
 
@@ -537,7 +550,8 @@ rule("Update@Global: UpdateMinePlayerHarvest")
 			For Global Variable(ArrayIteratorB, 0, Count Of(Global.A), 1);
 				"The player to process."
 				Global.D = Global.A[Global.ArrayIteratorB];
-				Global.C = Min(Global.B, Global.D.GoldHarvestAmount);
+				"The amount of gold to harvest."
+				Global.C = Min(Global.B, Global.D.GoldHarvestAmount * Global.TeamGoldHarvestAmountFactorArray[Global.D.TeamIndex]);
 				If(Global.C > 0);
 					Global.D.GoldCount += Global.C;
 					Global.MineGoldCountArray[Global.ArrayIteratorA] -= Global.C;
@@ -722,7 +736,7 @@ rule("OnRespawn@Player: SetIsInBase")
 	}
 }
 
-rule("OnJoinedMatch@Player: Log")
+rule("OnJoinedMatch@Player: CalculateTeamHandicap")
 {
 	event
 	{
@@ -734,10 +748,11 @@ rule("OnJoinedMatch@Player: Log")
 	actions
 	{
 		Log To Inspector(Custom String("Player {0} joined the match.", Event Player));
+		Call Subroutine(CalculateTeamHandicap);
 	}
 }
 
-rule("OnLeftMatch@Player: Log")
+rule("OnLeftMatch@Player: CalculateTeamHandicap")
 {
 	event
 	{
@@ -749,6 +764,7 @@ rule("OnLeftMatch@Player: Log")
 	actions
 	{
 		Log To Inspector(Custom String("Player {0} left the match.", Event Player));
+		Call Subroutine(CalculateTeamHandicap);
 	}
 }
 
@@ -882,5 +898,30 @@ rule("Update@Player: DepositGoldInBase")
 			End;
 		End;
 		disabled Destroy Effect(Event Player.GoldDepositSoundEffectId);
+	}
+}
+
+rule("Subroutine: CalculateTeamHandicap")
+{
+	event
+	{
+		Subroutine;
+		CalculateTeamHandicap;
+	}
+
+	actions
+	{
+		If(Global.EnableGoldHarvestBalancing == False);
+			Global.TeamGoldHarvestAmountFactorArray = Array(1, 1);
+			Abort;
+		End;
+		Global.A = Max(1, Count Of(All Players(Team 1)));
+		Global.B = Max(1, Count Of(All Players(Team 2)));
+		Global.TeamGoldHarvestAmountFactorArray[0] = Max(1, Global.B / Global.A);
+		Global.TeamGoldHarvestAmountFactorArray[1] = Max(1, Global.A / Global.B);
+		Log To Inspector(Custom String("Team 1: Players={0}, GoldHarvestFactor={1}", Count Of(All Players(Team 1)),
+			Global.TeamGoldHarvestAmountFactorArray[0]));
+		Log To Inspector(Custom String("Team 2: Players={0}, GoldHarvestFactor={1}", Count Of(All Players(Team 2)),
+			Global.TeamGoldHarvestAmountFactorArray[1]));
 	}
 }
