@@ -808,6 +808,7 @@ rule("OnBaseEntered@Player: Shelter")
 
 	actions
 	{
+		Event Player.UltimateCharge = Ultimate Charge Percent(Event Player);
 		Set Invisible(Event Player, Enemies);
 		Set Status(Event Player, Null, Invincible, 9999);
 		Start Heal Over Time(Event Player, Event Player, 9999, 25);
@@ -845,6 +846,7 @@ rule("OnBaseLeft@Player: Unshelter")
 		Set Ultimate Ability Enabled(Event Player, True);
 		Set Primary Fire Enabled(Event Player, True);
 		Set Secondary Fire Enabled(Event Player, True);
+		Set Ultimate Charge(Event Player, Event Player.UltimateCharge);
 	}
 }
 
