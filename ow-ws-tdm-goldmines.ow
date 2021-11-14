@@ -94,8 +94,10 @@ variables
 		55: UpdateInterval
 		56: PlayerGoldDepositPerFrame
 		57: BaseColor
+		58: GoldName
 		63: TeamGoldHarvestAmountFactorArray
 		64: EnableGoldHarvestBalancing
+		66: GoldLootOrbTextArray
 
 	player:
 		26: TeamIndex
@@ -333,6 +335,7 @@ rule("Init@Global: InitGlobalVars")
 		Global.RespawningMineColor = Custom Color(18, 18, 18, 128);
 		Global.UpdateInterval = 0.016;
 		Call Subroutine(CalculateTeamHandicap);
+		Global.GoldName = Custom String("Gold");
 	}
 }
 
@@ -499,7 +502,7 @@ rule("Init@Player: HUD")
 			Destroy HUD Text(Event Player.HUDArray[Event Player.ArrayIteratorA]);
 		End;
 		Event Player.HUDArray = Array();
-		Create HUD Text(Event Player, Custom String("{0} {1} {0}", Icon String(Diamond), Event Player.GoldCount), Null, Null, Top, 0,
+		Create HUD Text(Event Player, Custom String("{0} {1}", Event Player.GoldCount, Global.GoldName), Null, Null, Top, 0,
 			Global.GoldColor, Color(White), Color(White), Visible To and String, Default Visibility);
 		Modify Player Variable(Event Player, HUDArray, Append To Array, Last Text ID);
 		Create Progress Bar HUD Text(Event Player.EnterBaseTimer > 0 ? Event Player : Null, 100 * Min(1,
@@ -691,10 +694,12 @@ rule("Update@Player: UpdateGoldLootCollision")
 			If(Distance Between(Position Of(Event Player), Global.GoldLootOrbPositionArray[Global.ArrayIteratorA])
 				<= Global.GoldLootOrbCollectionRadius + Global.RadiusPlayerProximityBuffer);
 				Destroy Effect(Global.GoldLootOrbEffectArray[Global.ArrayIteratorA]);
+				Destroy In-World Text(Global.GoldLootOrbTextArray[Global.ArrayIteratorA]);
 				Event Player.GoldCount += Global.GoldLootOrbValueArray[Global.ArrayIteratorA];
 				Modify Global Variable(GoldLootOrbPositionArray, Remove From Array By Index, Global.ArrayIteratorA);
 				Modify Global Variable(GoldLootOrbValueArray, Remove From Array By Index, Global.ArrayIteratorA);
 				Modify Global Variable(GoldLootOrbEffectArray, Remove From Array By Index, Global.ArrayIteratorA);
+				Modify Global Variable(GoldLootOrbTextArray, Remove From Array By Index, Global.ArrayIteratorA);
 				Play Effect(Event Player, Buff Explosion Sound, Color(White), Event Player, 100);
 				Log To Inspector(Custom String("Destroy GoldLoot: {0}", Global.ArrayIteratorA));
 			End;
@@ -725,6 +730,10 @@ rule("Update@Global: SpawnGoldLoot")
 			Create Effect(All Players(All Teams), Orb, Global.GoldColor, Global.GoldLootOrbSpawnQueue[Global.ArrayIteratorA][0],
 				Global.GoldLootOrbVisualRadius, Visible To);
 			Modify Global Variable(GoldLootOrbEffectArray, Append To Array, Last Created Entity);
+			Create In-World Text(All Players(All Teams), Custom String("{0}", Global.GoldLootOrbSpawnQueue[Global.ArrayIteratorA][1]),
+				Global.GoldLootOrbSpawnQueue[Global.ArrayIteratorA][0], 1, Clip Against Surfaces, Visible To, Global.GoldColor,
+				Default Visibility);
+			Modify Global Variable(GoldLootOrbTextArray, Append To Array, Last Text ID);
 		End;
 		Global.GoldLootOrbSpawnQueue = Array();
 		Loop If Condition Is True;
@@ -750,8 +759,8 @@ rule("OnDeath@Player: EnqueueGoldLootDrop")
 		Wait(0.250, Ignore Condition);
 		Event Player.A = Round To Integer(Event Player.GoldCount * Global.PlayerDeathGoldDropRatio, Down);
 		Abort If(Event Player.A == 0);
-		Event Player.B = Array(Evaluate Once(Nearest Walkable Position(Evaluate Once(Position Of(Event Player)))), Evaluate Once(
-			Event Player.A));
+		Event Player.B = Array(Up * 0.500 + Evaluate Once(Nearest Walkable Position(Evaluate Once(Position Of(Event Player)))),
+			Evaluate Once(Event Player.A));
 		"Enqueue a GoldLoot spawn command."
 		Global.GoldLootOrbSpawnQueue[Count Of(Global.GoldLootOrbSpawnQueue)] = Event Player.B;
 		Event Player.GoldCount -= Event Player.A;
