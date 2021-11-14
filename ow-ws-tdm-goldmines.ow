@@ -114,6 +114,70 @@ subroutines
 {
 	0: CalculateTeamHandicap
 }
+
+rule("DEBUG:VoiceUp@Player: SpawnDummyBotSameTeam")
+{
+	event
+	{
+		Ongoing - Each Player;
+		All;
+		All;
+	}
+
+	conditions
+	{
+		Global.DEBUG == True;
+		Is Communicating(Event Player, Voice Line Up) == True;
+	}
+
+	actions
+	{
+		Create Dummy Bot(Random Value In Array(All Heroes), Team Of(Event Player), -1,
+			Global.SpawnPositionTeamArray[Event Player.TeamIndex], Vector(0, 0, 0));
+	}
+}
+
+rule("DEBUG:VoiceDown@Player: SpawnDummyBotOtherTeam")
+{
+	event
+	{
+		Ongoing - Each Player;
+		All;
+		All;
+	}
+
+	conditions
+	{
+		Global.DEBUG == True;
+		Is Communicating(Event Player, Voice Line Down) == True;
+	}
+
+	actions
+	{
+		Create Dummy Bot(Random Value In Array(All Heroes), Opposite Team Of(Team Of(Event Player)), -1,
+			Global.SpawnPositionTeamArray[1 - Event Player.TeamIndex], Vector(0, 0, 0));
+	}
+}
+
+rule("DEBUG:VoiceRight@Player: DestroyAllDummyBots")
+{
+	event
+	{
+		Ongoing - Each Player;
+		All;
+		All;
+	}
+
+	conditions
+	{
+		Global.DEBUG == True;
+		Is Communicating(Event Player, Voice Line Right) == True;
+	}
+
+	actions
+	{
+		Destroy All Dummy Bots;
+	}
 }
 
 rule("DEBUG:Interact@Player: TeleportToRandomMine")
