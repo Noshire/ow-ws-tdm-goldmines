@@ -869,15 +869,18 @@ rule("Update@Player: DepositGoldInBase")
 
 	actions
 	{
-		Create Effect(Event Player, Energy Sound, Color(White), Eye Position(Event Player), 200, Visible To Position and Radius);
-		Event Player.GoldDepositSoundEffectId = Last Created Entity;
+		disabled Create Effect(Event Player, Energy Sound, Color(White), Eye Position(Event Player), 200, Visible To Position and Radius);
+		disabled Event Player.GoldDepositSoundEffectId = Last Created Entity;
 		While(True);
 			Wait(Global.UpdateInterval, Abort When False);
 			Abort If Condition Is False;
 			Event Player.A = Min(Global.PlayerGoldDepositPerFrame, Event Player.GoldCount);
 			Event Player.GoldCount -= Event Player.A;
 			Global.ScoreTeamArray[Event Player.TeamIndex] += Event Player.A;
+			If(Event Player.GoldCount <= 0);
+				Play Effect(Global.D, Buff Explosion Sound, Color(White), Position Of(Global.D), 100);
+			End;
 		End;
-		Destroy Effect(Event Player.GoldDepositSoundEffectId);
+		disabled Destroy Effect(Event Player.GoldDepositSoundEffectId);
 	}
 }
