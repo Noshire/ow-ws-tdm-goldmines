@@ -94,8 +94,14 @@ variables
 		55: UpdateInterval
 		56: PlayerGoldDepositPerFrame
 		57: BaseColor
+		58: TotemArray
+		59: TotemTypeArray
+		60: TotemCaptureCostInitial
+		61: TotemCaptureCostIncrease
+		62: TotemCaptureCostMax
 		63: TeamGoldHarvestAmountFactorArray
 		64: EnableGoldHarvestBalancing
+		65: TotemRadius
 
 	player:
 		26: TeamIndex
@@ -294,27 +300,6 @@ rule("Init@Global: ApplyWorkshopSettings: Dev")
 	}
 }
 
-rule("Init@Global: Map: Ilios Lighthouse")
-{
-	event
-	{
-		Ongoing - Global;
-	}
-
-	conditions
-	{
-		Current Map == Map(Ilios Lighthouse);
-	}
-
-	actions
-	{
-		Global.SpawnPositionTeamArray = Array(Vector(336.461, -24.274, 22.927), Vector(290.193, -24.276, -88.772));
-		Global.MinePositionArray = Array(Vector(329.230, -17.341, -56.517), Vector(341.309, -17.341, -27.567), Vector(332.087, -26.341,
-			-95.429), Vector(370.586, -26.341, -1.469), Vector(317.227, -22.342, -22.655), Vector(307.874, -22.341, -43.050), Vector(
-			357.681, -24.341, -51.111));
-	}
-}
-
 rule("Init@Global: InitGlobalVars")
 {
 	event
@@ -332,7 +317,12 @@ rule("Init@Global: InitGlobalVars")
 		Global.BaseColor = Custom Color(125, 255, 251, 255);
 		Global.RespawningMineColor = Custom Color(18, 18, 18, 128);
 		Global.UpdateInterval = 0.016;
+		Global.TotemTypeArray = Array(Array(Custom String("Developer Totem"), Custom String("Breaks the game.")));
+		Global.TotemCaptureCostInitial = 1;
+		Global.TotemCaptureCostIncrease = 1;
+		Global.TotemCaptureCostMax = 99;
 		Call Subroutine(CalculateTeamHandicap);
+		Global.TotemRadius = 1.500;
 	}
 }
 
@@ -353,6 +343,32 @@ rule("Init@Global: InitGameMode")
 		Disable Built-In Game Mode Completion;
 		Disable Built-In Game Mode Scoring;
 		Pause Match Time;
+	}
+}
+
+rule("Init@Global: Map: Ilios Lighthouse")
+{
+	event
+	{
+		Ongoing - Global;
+	}
+
+	conditions
+	{
+		Current Map == Map(Ilios Lighthouse);
+	}
+
+	actions
+	{
+		Global.SpawnPositionTeamArray = Array(Vector(336.461, -24.274, 22.927), Vector(290.193, -24.276, -88.772));
+		Global.MinePositionArray = Array(Vector(329.230, -17.341, -56.517), Vector(341.309, -17.341, -27.567), Vector(332.087, -26.341,
+			-95.429), Vector(370.586, -26.341, -1.469), Vector(317.227, -22.342, -22.655), Vector(307.874, -22.341, -43.050), Vector(
+			357.681, -24.341, -51.111));
+		disabled Global.TotemArray = Array(Array(Global.TotemTypeArray[0], Vector(348.030, -24.231, 20.273), Null, Evaluate Once(
+			Global.TotemCaptureCostInitial)));
+		Global.TotemArray = Array(Array(Global.TotemTypeArray[0], Vector(325.981, -22.288, -38.457), Null, Evaluate Once(
+			Global.TotemCaptureCostInitial)), Array(Global.TotemTypeArray[0], Vector(348.030, -24.231, 20.273), Null, Evaluate Once(
+			Global.TotemCaptureCostInitial)));
 	}
 }
 
@@ -383,6 +399,54 @@ rule("Init@Global: InitMines")
 				All Teams) : Null, Omnic Slicer Beam, Global.MinePositionArray[Global.ArrayIteratorA] + Up * Global.MineRadius,
 				Global.MinePositionArray[Global.ArrayIteratorA] + Up * 100, Global.GoldColor, Visible To);
 			Create Progress Bar In-World Text(Filtered Array(All Players(All Teams), !Array Contains(
+				Global.MinePlayerIntersectionArray2D[Evaluate Once(Global.ArrayIteratorA)], Current Array Element)),
+				Global.MineGoldCountArray[Evaluate Once(Global.ArrayIteratorA)] > 0 ? 100 * Global.MineGoldCountArray[Evaluate Once(
+				Global.ArrayIteratorA)] / Global.MineGoldMax : 100 * Global.MineRespawnTimerArray[Evaluate Once(Global.ArrayIteratorA)
+				] / Global.MineRespawnDuration, Global.MineGoldCountArray[Evaluate Once(Global.ArrayIteratorA)] > 0 ? Custom String("{0}/{1}",
+				Global.MineGoldCountArray[Evaluate Once(Global.ArrayIteratorA)], Global.MineGoldMax) : Custom String("Regenerating..."),
+				Global.MinePositionArray[Global.ArrayIteratorA] + Up * 2.500, 0.350, Clip Against Surfaces,
+				Global.MineGoldCountArray[Evaluate Once(Global.ArrayIteratorA)] > 0 ? Global.GoldColor : Global.RespawningMineColor,
+				Global.MineGoldCountArray[Evaluate Once(Global.ArrayIteratorA)] > 0 ? Global.GoldColor : Global.RespawningMineColor,
+				Visible To Values and Color, Default Visibility);
+		End;
+	}
+}
+
+rule("Init@Global: InitTotems")
+{
+	event
+	{
+		Ongoing - Global;
+	}
+
+	conditions
+	{
+		Is Game In Progress == True;
+	}
+
+	actions
+	{
+		For Global Variable(ArrayIteratorA, 0, Count Of(Global.TotemArray), 1);
+			Global.A = Evaluate Once(Global.TotemArray[Evaluate Once(Global.ArrayIteratorA)]);
+			Global.B = Evaluate Once(Global.TotemTypeArray[Evaluate Once(Global.A[0])]);
+			Log To Inspector(Custom String("Totem: {0}, Type: {1}", Global.A, Global.B));
+			disabled Global.ArrayIteratorB = Global.MineGoldCountArray[Global.ArrayIteratorA];
+			disabled Global.MineRespawnTimerArray[Global.ArrayIteratorA] = 0;
+			disabled Global.MineGoldCountArray[Global.ArrayIteratorA] = Global.MineGoldMax;
+			Create In-World Text(All Players(All Teams), Custom String("{0}\r\n{1}\r\nCapture Cost: {2}", Evaluate Once(Global.B[1]),
+				Evaluate Once(Global.A[2]), Evaluate Once(Global.A[3])), Up * 2 + Global.A[1], 1, Clip Against Surfaces, Visible To and String,
+				Color(White), Default Visibility);
+			Create Effect(All Players(All Teams), Ring, Global.TotemArray[Global.ArrayIteratorA][2] == Team 1 ? Global.ColorTeamArray[0] : (
+				Global.TotemArray[Global.ArrayIteratorA][2] == Team 2 ? Global.ColorTeamArray[1] : Color(White)),
+				Global.TotemArray[Global.ArrayIteratorA][1], Global.TotemRadius, Visible To and Color);
+			Create Effect(All Players(All Teams), Echo Cloning Effect,
+				Global.TotemArray[Global.ArrayIteratorA][2] == Team 1 ? Global.ColorTeamArray[0] : (
+				Global.TotemArray[Global.ArrayIteratorA][2] == Team 2 ? Global.ColorTeamArray[1] : Color(White)),
+				Global.TotemArray[Global.ArrayIteratorA][1], Global.TotemRadius, Visible To and Color);
+			disabled Create Beam Effect(Count Of(Global.MinePlayerIntersectionArray2D[Evaluate Once(Global.ArrayIteratorA)]) > 0 ? All Players(
+				All Teams) : Null, Omnic Slicer Beam, Global.MinePositionArray[Global.ArrayIteratorA] + Up * Global.MineRadius,
+				Global.MinePositionArray[Global.ArrayIteratorA] + Up * 100, Global.GoldColor, Visible To);
+			disabled Create Progress Bar In-World Text(Filtered Array(All Players(All Teams), !Array Contains(
 				Global.MinePlayerIntersectionArray2D[Evaluate Once(Global.ArrayIteratorA)], Current Array Element)),
 				Global.MineGoldCountArray[Evaluate Once(Global.ArrayIteratorA)] > 0 ? 100 * Global.MineGoldCountArray[Evaluate Once(
 				Global.ArrayIteratorA)] / Global.MineGoldMax : 100 * Global.MineRespawnTimerArray[Evaluate Once(Global.ArrayIteratorA)
