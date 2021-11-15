@@ -98,9 +98,14 @@ variables
 		58: GoldName
 		59: GoldColorHarvesting
 		60: GoldColorExhausted
+		61: GoldCarrySpeedPenaltyAmount
+		62: GoldCarrySpeedPenaltyInterval
 		63: TeamGoldHarvestAmountFactorArray
 		64: EnableGoldHarvestBalancing
+		65: GoldCarrySpeedPenaltyMax
 		66: GoldLootOrbTextArray
+		67: SubroutineTargetA
+		68: GoldCarrySpeedPenaltyFreeAmount
 
 	player:
 		26: TeamIndex
@@ -115,11 +120,13 @@ variables
 		35: UltimateCharge
 		36: IsViewingTutorial
 		37: EffectArray
+		38: SpeedPenalty
 }
 
 subroutines
 {
 	0: CalculateTeamHandicap
+	1: CalculatePlayerSpeedPenalty
 }
 
 rule("DEBUG:VoiceUp@Player: SpawnDummyBotSameTeam")
@@ -260,12 +267,20 @@ rule("Init@Global: ApplyWorkshopSettings: Players")
 		Global.PlayerGoldHarvestInterval = Workshop Setting Real(Custom String("Players"), Custom String(
 			"Gold Harvest Interval in Seconds"), 0.500, 0.050, 60, 0);
 		Global.PlayerGoldHarvestAmountBase = Workshop Setting Integer(Custom String("Players"), Custom String("Gold Harvest Amount Base"),
-			10, 0, 1000, 0);
+			10, 0, 1000, 1);
 		Global.PlayerEnterBaseTimerMax = Workshop Setting Real(Custom String("Players"), Custom String("Gold Deposit Timer in Seconds"),
-			3.500, 0, 60, 0);
-		Global.PlayerDeathGoldDropRatio = Workshop Setting Real(Custom String("Players"), Custom String("Gold Drop Ratio"), 1, 0, 1, 0);
+			3.500, 0, 60, 2);
+		Global.PlayerDeathGoldDropRatio = Workshop Setting Real(Custom String("Players"), Custom String("Gold Drop Ratio"), 1, 0, 1, 3);
 		Global.PlayerGoldDepositPerFrame = Workshop Setting Integer(Custom String("Player"), Custom String("Gold Deposit Speed"), 5, 1,
-			100000, 0);
+			100000, 4);
+		Global.GoldCarrySpeedPenaltyAmount = Workshop Setting Real(Custom String("Player"), Custom String(
+			"Movement speed penalty % per X Energy carried"), 5, 0, 100, 5);
+		Global.GoldCarrySpeedPenaltyInterval = Workshop Setting Real(Custom String("Player"), Custom String(
+			"Amount of Energy per movement speed decrease step"), 100, 1, 100000, 6);
+		Global.GoldCarrySpeedPenaltyMax = Workshop Setting Real(Custom String("Player"), Custom String("Maximum movement speed penalty %"),
+			35, 0, 100, 7);
+		Global.GoldCarrySpeedPenaltyFreeAmount = Workshop Setting Real(Custom String("Player"), Custom String(
+			"Penalty-free amount of Energy"), 200, 0, 100000, 8);
 	}
 }
 
@@ -281,7 +296,7 @@ rule("Init@Global: ApplyWorkshopSettings: Gold Mines")
 		Global.MineGoldMax = Workshop Setting Integer(Custom String("Gold Mines"), Custom String("Max. Gold per Mine"), 200, 10, 1000, 0);
 		Global.MineRadius = Workshop Setting Real(Custom String("Gold Mines"), Custom String("Radius"), 2.500, 0.500, 15, 0);
 		Global.MineRespawnDuration = Workshop Setting Real(Custom String("Gold Mines"), Custom String("Regeneration Duration in Seconds"),
-			30, 1, 300, 0);
+			20, 1, 300, 0);
 	}
 }
 
@@ -328,6 +343,8 @@ rule("Init@Global: Map: Ilios Lighthouse")
 		disabled Modify Global Variable(MinePositionArray, Append To Array, Vector(317.227, -22.342, -22.655));
 		"Neutral: Lighthouse"
 		Modify Global Variable(MinePositionArray, Append To Array, Vector(357.681, -24.341, -51.111));
+		"Neutral: Central Building"
+		Modify Global Variable(MinePositionArray, Append To Array, Vector(327.378, -22.287, -38.788));
 	}
 }
 
@@ -539,6 +556,10 @@ rule("Init@Player: HUD")
 			Custom String("Crouch for Tutorial"), Null, Top, 3, Global.BaseColor, Global.BaseColor, Global.BaseColor, Visible To,
 			Default Visibility);
 		Modify Player Variable(Event Player, HUDArray, Append To Array, Last Text ID);
+		Create HUD Text(Event Player.SpeedPenalty > 0 && Event Player.IsViewingTutorial == False ? Event Player : Null, Null,
+			Custom String("Overburdened! -{0}% Speed.", Event Player.SpeedPenalty), Null, Top, 4, Global.BaseColor, Global.BaseColor,
+			Global.BaseColor, Visible To and String, Default Visibility);
+		Modify Player Variable(Event Player, HUDArray, Append To Array, Last Text ID);
 	}
 }
 
@@ -673,6 +694,8 @@ rule("Update@Global: UpdateMinePlayerHarvest")
 				If(Global.C > 0);
 					Global.D.GoldCount += Global.C;
 					Global.MineGoldCountArray[Global.ArrayIteratorA] -= Global.C;
+					Global.SubroutineTargetA = Global.D;
+					Call Subroutine(CalculatePlayerSpeedPenalty);
 					Play Effect(Global.D, Buff Explosion Sound, Color(White), Position Of(Global.D), 100);
 					disabled Log To Inspector(Custom String("Player {0} Harvests {1} Gold from Mine {2}", Global.D, Global.C, Global.ArrayIteratorA));
 				End;
@@ -815,6 +838,8 @@ rule("OnDeath@Player: EnqueueGoldLootDrop")
 		"Enqueue a GoldLoot spawn command."
 		Global.GoldLootOrbSpawnQueue[Count Of(Global.GoldLootOrbSpawnQueue)] = Event Player.B;
 		Event Player.GoldCount -= Event Player.A;
+		Global.SubroutineTargetA = Event Player;
+		Call Subroutine(CalculatePlayerSpeedPenalty);
 	}
 }
 
@@ -1017,6 +1042,8 @@ rule("Update@Player: DepositGoldInBase")
 			Event Player.A = Min(Global.PlayerGoldDepositPerFrame, Event Player.GoldCount);
 			Event Player.GoldCount -= Event Player.A;
 			Global.ScoreTeamArray[Event Player.TeamIndex] += Event Player.A;
+			Global.SubroutineTargetA = Event Player;
+			Call Subroutine(CalculatePlayerSpeedPenalty);
 			If(Event Player.GoldCount <= 0);
 				Play Effect(Global.D, Buff Explosion Sound, Color(White), Position Of(Global.D), 100);
 			End;
@@ -1050,31 +1077,6 @@ rule("CrouchInBase@Player: SetTutorialVisible")
 				Abort;
 			End;
 		End;
-	}
-}
-
-rule("Subroutine: CalculateTeamHandicap")
-{
-	event
-	{
-		Subroutine;
-		CalculateTeamHandicap;
-	}
-
-	actions
-	{
-		If(Global.EnableGoldHarvestBalancing == False);
-			Global.TeamGoldHarvestAmountFactorArray = Array(1, 1);
-			Abort;
-		End;
-		Global.A = Max(1, Count Of(All Players(Team 1)));
-		Global.B = Max(1, Count Of(All Players(Team 2)));
-		Global.TeamGoldHarvestAmountFactorArray[0] = Max(1, Global.B / Global.A);
-		Global.TeamGoldHarvestAmountFactorArray[1] = Max(1, Global.A / Global.B);
-		Log To Inspector(Custom String("Team 1: Players={0}, GoldHarvestFactor={1}", Count Of(All Players(Team 1)),
-			Global.TeamGoldHarvestAmountFactorArray[0]));
-		Log To Inspector(Custom String("Team 2: Players={0}, GoldHarvestFactor={1}", Count Of(All Players(Team 2)),
-			Global.TeamGoldHarvestAmountFactorArray[1]));
 	}
 }
 
@@ -1150,5 +1152,47 @@ rule("Init@Global:TutorialHUD")
 		Create In-World Text(Filtered Array(All Players(All Teams), Current Array Element.IsViewingTutorial == True), Custom String(
 			"It takes {0} seconds to enter your base. While\r\nin your base, you are invulnerable, get healed\r\nand can not use any abilities.",
 			Global.PlayerEnterBaseTimerMax), Global.A + Up * -3.250, 2, Do Not Clip, Visible To, Color(White), Default Visibility);
+	}
+}
+
+rule("Subroutine: CalculateTeamHandicap")
+{
+	event
+	{
+		Subroutine;
+		CalculateTeamHandicap;
+	}
+
+	actions
+	{
+		If(Global.EnableGoldHarvestBalancing == False);
+			Global.TeamGoldHarvestAmountFactorArray = Array(1, 1);
+			Abort;
+		End;
+		Global.A = Max(1, Count Of(All Players(Team 1)));
+		Global.B = Max(1, Count Of(All Players(Team 2)));
+		Global.TeamGoldHarvestAmountFactorArray[0] = Max(1, Global.B / Global.A);
+		Global.TeamGoldHarvestAmountFactorArray[1] = Max(1, Global.A / Global.B);
+		Log To Inspector(Custom String("Team 1: Players={0}, GoldHarvestFactor={1}", Count Of(All Players(Team 1)),
+			Global.TeamGoldHarvestAmountFactorArray[0]));
+		Log To Inspector(Custom String("Team 2: Players={0}, GoldHarvestFactor={1}", Count Of(All Players(Team 2)),
+			Global.TeamGoldHarvestAmountFactorArray[1]));
+	}
+}
+
+rule("Subroutine: CalculatePlayerSpeedPenalty")
+{
+	event
+	{
+		Subroutine;
+		CalculatePlayerSpeedPenalty;
+	}
+
+	actions
+	{
+		Global.SubroutineTargetA.SpeedPenalty = Min(Global.GoldCarrySpeedPenaltyMax, Global.GoldCarrySpeedPenaltyAmount * Round To Integer(
+			Max(0, Global.SubroutineTargetA.GoldCount - Global.GoldCarrySpeedPenaltyFreeAmount) / Global.GoldCarrySpeedPenaltyInterval,
+			Down));
+		Set Move Speed(Global.SubroutineTargetA, 100 - Global.SubroutineTargetA.SpeedPenalty);
 	}
 }
