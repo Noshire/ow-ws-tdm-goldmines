@@ -319,13 +319,13 @@ rule("Init@Global: Map: Ilios Lighthouse")
 		"Blue: Balcony"
 		Modify Global Variable(MinePositionArray, Append To Array, Vector(341.309, -17.341, -27.567));
 		"Red: Terrace"
-		Modify Global Variable(MinePositionArray, Append To Array, Vector(332.087, -26.341, -95.429));
+		disabled Modify Global Variable(MinePositionArray, Append To Array, Vector(332.087, -26.341, -95.429));
 		"Blue: Terrace"
-		Modify Global Variable(MinePositionArray, Append To Array, Vector(370.586, -26.341, -1.469));
+		disabled Modify Global Variable(MinePositionArray, Append To Array, Vector(370.586, -26.341, -1.469));
 		"Red: Street Corner"
-		Modify Global Variable(MinePositionArray, Append To Array, Vector(307.874, -22.341, -43.050));
+		disabled Modify Global Variable(MinePositionArray, Append To Array, Vector(307.874, -22.341, -43.050));
 		"Blue: Street Corner"
-		Modify Global Variable(MinePositionArray, Append To Array, Vector(317.227, -22.342, -22.655));
+		disabled Modify Global Variable(MinePositionArray, Append To Array, Vector(317.227, -22.342, -22.655));
 		"Neutral: Lighthouse"
 		Modify Global Variable(MinePositionArray, Append To Array, Vector(357.681, -24.341, -51.111));
 	}
